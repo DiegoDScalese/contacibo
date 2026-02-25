@@ -73,10 +73,7 @@ def calc_meal(text):
         if not line:
             continue
 
-        # Caso: "alimento 480 g" o "alimento 480 gr" o "alimento 480g"
         m_weight = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)\s*$", line)
-
-        # Caso: "alimento 1" (unidad)
         m_unit = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*$", line)
 
         if m_weight:
@@ -87,9 +84,10 @@ def calc_meal(text):
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "100g":
-                return None, f"{name} es unidad (ej: '{name} 1')"
+                return None, f"{name} es unidad"
 
-            total += (qty / 100) * float(food["valor_kcal"])
+            kcal_value = float(str(food["valor_kcal"]).replace(",", "."))
+            total += (qty / 100) * kcal_value
 
         elif m_unit:
             name = m_unit.group(1).strip()
@@ -99,9 +97,10 @@ def calc_meal(text):
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "unidad":
-                return None, f"{name} es 100g (ej: '{name} 200 g')"
+                return None, f"{name} es 100g"
 
-            total += qty * float(food["valor_kcal"])
+            kcal_value = float(str(food["valor_kcal"]).replace(",", "."))
+            total += qty * kcal_value
 
         else:
             return None, f"No pude interpretar: {line}"
