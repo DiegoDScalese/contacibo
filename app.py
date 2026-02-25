@@ -33,6 +33,13 @@ logs = pd.DataFrame(logs_ws.get_all_records())
 foods["alimento"] = foods["alimento"].astype(str).str.lower().str.strip()
 foods["tipo"] = foods["tipo"].astype(str).str.lower().str.strip()
 
+foods["valor_kcal"] = (
+    foods["valor_kcal"]
+    .astype(str)
+    .str.replace(",", ".", regex=False)
+    .astype(float)
+)
+
 MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
 
 # =========================
