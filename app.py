@@ -4,14 +4,10 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
-# =========================
-# CONFIG
-# =========================
-
 st.set_page_config(page_title="ContaCibo", page_icon="🇮🇹", layout="centered")
 
 # =========================
-# GOOGLE SHEETS CONNECTION
+# GOOGLE SHEETS
 # =========================
 
 @st.cache_resource
@@ -20,22 +16,16 @@ def get_client():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=scope
     )
-
     return gspread.authorize(credentials)
 
 client = get_client()
 sheet = client.open("ContaCibo_DB")
 foods_ws = sheet.worksheet("foods")
 logs_ws = sheet.worksheet("logs")
-
-# =========================
-# LOAD DATA (CACHED)
-# =========================
 
 @st.cache_data
 def load_foods():
@@ -53,11 +43,9 @@ def load_foods():
         .astype(float)
     )
 
-    # Corregir 220,00 → 22000
     df.loc[df["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
 
     return df
-
 
 @st.cache_data
 def load_logs():
@@ -65,7 +53,6 @@ def load_logs():
     if df.empty:
         return pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
     return df
-
 
 foods = load_foods()
 logs = load_logs()
@@ -87,38 +74,57 @@ mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"], horizontal=Tr
 if mode == "Calcular":
 
     if "rows_count" not in st.session_state:
-        st.session_state.rows_count = 5
+        st.session_state.rows_count = 4  # 4 filas + 1 libre
 
     meal = st.selectbox("Comida", MEALS)
 
     st.divider()
 
-    rows_data = []
+    # 🔥 FILA 1 = KCAL LIBRES
+    kcal_libres = st.number_input("🔥 Kcal libres", min_value=0.0)
 
+    total = 0.0
+    detalle = []
+
+    # FILAS DE ALIMENTOS
     for i in range(st.session_state.rows_count):
 
-        alimento = st.selectbox(
-            "Alimento",
-            options=[""] + sorted(foods["alimento"].tolist()),
-            key=f"food_{i}"
-        )
+        col1, col2 = st.columns([3,1])
 
-        cantidad = st.number_input(
-            "Cantidad",
-            min_value=0.0,
-            key=f"qty_{i}"
-        )
+        with col1:
+            alimento = st.selectbox(
+                "",
+                options=[""] + sorted(foods["alimento"].tolist()),
+                key=f"food_{i}",
+                label_visibility="collapsed"
+            )
 
-        rows_data.append((alimento, cantidad))
+        with col2:
+            cantidad = st.number_input(
+                "",
+                min_value=0.0,
+                key=f"qty_{i}",
+                label_visibility="collapsed"
+            )
 
-        st.divider()
+        if alimento and cantidad > 0:
+            food_row = foods[foods["alimento"] == alimento].iloc[0]
 
-    kcal_libres = st.number_input("Kcal libres (opcional)", min_value=0.0)
+            if food_row["tipo"] == "100g":
+                total += (cantidad / 100.0) * float(food_row["valor_kcal"])
+            else:
+                total += cantidad * float(food_row["valor_kcal"])
+
+            detalle.append(f"{alimento} {cantidad}")
+
+    if kcal_libres > 0:
+        total += kcal_libres
+        detalle.append(f"{kcal_libres} kcal libres")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("➕ Agregar fila"):
+        if st.button("➕"):
             st.session_state.rows_count += 1
             st.rerun()
 
@@ -126,25 +132,6 @@ if mode == "Calcular":
         calcular = st.button("Calcular")
 
     if calcular:
-
-        total = 0.0
-        detalle = []
-
-        for alimento, cantidad in rows_data:
-            if alimento and cantidad > 0:
-                food_row = foods[foods["alimento"] == alimento].iloc[0]
-
-                if food_row["tipo"] == "100g":
-                    total += (cantidad / 100.0) * float(food_row["valor_kcal"])
-                else:
-                    total += cantidad * float(food_row["valor_kcal"])
-
-                detalle.append(f"{alimento} {cantidad}")
-
-        if kcal_libres > 0:
-            total += kcal_libres
-            detalle.append(f"{kcal_libres} kcal libres")
-
         st.success(f"{meal.capitalize()} = {round(total)} kcal")
 
         if st.button("Guardar"):
@@ -216,10 +203,9 @@ if mode == "Ver hoy":
             st.divider()
             st.write(f"**Total del día:** {round(total_dia)} kcal")
 
-            gym = st.toggle("Fui al gimnasio hoy?")
+            gym = st.toggle("🏋️ Fui al gimnasio")
             meta = 1950 if gym else 1700
-
             restante = meta - total_dia
 
-            st.write(f"Meta diaria: {meta} kcal")
+            st.write(f"Meta: {meta} kcal")
             st.write(f"Restantes: {round(restante)} kcal")
