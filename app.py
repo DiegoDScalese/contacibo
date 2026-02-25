@@ -5,46 +5,70 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
 # =========================
+# CONFIG
+# =========================
+
+st.set_page_config(page_title="ContaCibo", page_icon="🇮🇹", layout="centered")
+
+# =========================
 # GOOGLE SHEETS CONNECTION
 # =========================
 
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+@st.cache_resource
+def get_client():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
-credentials = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=scope
-)
+    credentials = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
+    )
 
-client = gspread.authorize(credentials)
+    return gspread.authorize(credentials)
 
+client = get_client()
 sheet = client.open("ContaCibo_DB")
-
 foods_ws = sheet.worksheet("foods")
 logs_ws = sheet.worksheet("logs")
 
-foods = pd.DataFrame(foods_ws.get_all_records())
-logs = pd.DataFrame(logs_ws.get_all_records())
+# =========================
+# LOAD DATA (CACHED)
+# =========================
 
-# Si logs vacío
-if logs.empty:
-    logs = pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
+@st.cache_data
+def load_foods():
+    df = pd.DataFrame(foods_ws.get_all_records())
+    if df.empty:
+        return pd.DataFrame(columns=["id","alimento","tipo","valor_kcal"])
 
-# Normalizar foods
-foods["alimento"] = foods["alimento"].astype(str).str.lower().str.strip()
-foods["tipo"] = foods["tipo"].astype(str).str.lower().str.strip()
+    df["alimento"] = df["alimento"].astype(str).str.lower().str.strip()
+    df["tipo"] = df["tipo"].astype(str).str.lower().str.strip()
 
-foods["valor_kcal"] = (
-    foods["valor_kcal"]
-    .astype(str)
-    .str.replace(",", ".", regex=False)
-    .astype(float)
-)
+    df["valor_kcal"] = (
+        df["valor_kcal"]
+        .astype(str)
+        .str.replace(",", ".", regex=False)
+        .astype(float)
+    )
 
-# Corregir error Sheets 220,00 → 22000
-foods.loc[foods["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
+    # Corregir 220,00 → 22000
+    df.loc[df["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
+
+    return df
+
+
+@st.cache_data
+def load_logs():
+    df = pd.DataFrame(logs_ws.get_all_records())
+    if df.empty:
+        return pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
+    return df
+
+
+foods = load_foods()
+logs = load_logs()
 
 MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
 
@@ -54,7 +78,7 @@ MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
 
 st.title("🇮🇹 ContaCibo")
 
-mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"])
+mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"], horizontal=True)
 
 # =========================
 # CALCULAR
@@ -67,37 +91,41 @@ if mode == "Calcular":
 
     meal = st.selectbox("Comida", MEALS)
 
-    st.subheader("Agregar alimentos")
+    st.divider()
 
     rows_data = []
 
     for i in range(st.session_state.rows_count):
 
-        col1, col2 = st.columns([2,1])
+        alimento = st.selectbox(
+            "Alimento",
+            options=[""] + sorted(foods["alimento"].tolist()),
+            key=f"food_{i}"
+        )
 
-        with col1:
-            alimento = st.selectbox(
-                f"Alimento {i+1}",
-                options=[""] + sorted(foods["alimento"].tolist()),
-                key=f"food_{i}"
-            )
-
-        with col2:
-            cantidad = st.number_input(
-                f"Cantidad {i+1}",
-                min_value=0.0,
-                key=f"qty_{i}"
-            )
+        cantidad = st.number_input(
+            "Cantidad",
+            min_value=0.0,
+            key=f"qty_{i}"
+        )
 
         rows_data.append((alimento, cantidad))
 
-    kcal_libres = st.number_input("Kcal libres", min_value=0.0)
+        st.divider()
 
-    if st.button("➕ Agregar fila"):
-        st.session_state.rows_count += 1
-        st.rerun()
+    kcal_libres = st.number_input("Kcal libres (opcional)", min_value=0.0)
 
-    if st.button("Calcular"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("➕ Agregar fila"):
+            st.session_state.rows_count += 1
+            st.rerun()
+
+    with col2:
+        calcular = st.button("Calcular")
+
+    if calcular:
 
         total = 0.0
         detalle = []
@@ -121,8 +149,8 @@ if mode == "Calcular":
 
         if st.button("Guardar"):
 
-            logs = pd.DataFrame(logs_ws.get_all_records())
-            new_id = int(logs["id"].max()) + 1 if not logs.empty else 1
+            logs_actual = load_logs()
+            new_id = int(logs_actual["id"].max()) + 1 if not logs_actual.empty else 1
 
             logs_ws.append_row([
                 new_id,
@@ -133,6 +161,7 @@ if mode == "Calcular":
                 "\n".join(detalle)
             ])
 
+            load_logs.clear()
             st.success("Guardado ✅")
 
 # =========================
@@ -159,14 +188,16 @@ if mode == "Agregar alimento":
             foods_ws.append_row([new_id, nombre.lower(), tipo, valor])
             st.success("Agregado ✅")
 
+        load_foods.clear()
+
 # =========================
 # VER HOY
 # =========================
 
 if mode == "Ver hoy":
 
+    logs = load_logs()
     today = str(date.today())
-    logs = pd.DataFrame(logs_ws.get_all_records())
 
     if logs.empty:
         st.info("No hay registros.")
@@ -177,13 +208,12 @@ if mode == "Ver hoy":
             st.info("No hay registros hoy.")
         else:
             resumen = today_logs.groupby("meal")["total_kcal"].sum()
-
             total_dia = resumen.sum()
 
             for meal_name, kcal in resumen.items():
                 st.write(f"**{meal_name.capitalize()}**: {round(kcal)} kcal")
 
-            st.write("---")
+            st.divider()
             st.write(f"**Total del día:** {round(total_dia)} kcal")
 
             gym = st.toggle("Fui al gimnasio hoy?")
