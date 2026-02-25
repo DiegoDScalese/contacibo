@@ -73,28 +73,51 @@ def calc_meal(text):
         if not line:
             continue
 
-        m_g = re.match(r"(\d+(?:\.\d+)?)g\s+(.+)", line)
-        m_u = re.match(r"(\d+(?:\.\d+)?)\s+(.+)", line)
+        # 480g calabaza
+        m1 = re.match(r"(\d+(?:[\.,]\d+)?)\s*(g|gr)\s+(.+)", line)
 
-        if m_g:
-            qty = float(m_g.group(1))
-            name = m_g.group(2)
+        # calabaza 480g
+        m2 = re.match(r"(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)", line)
+
+        # 1 huevo
+        m3 = re.match(r"(\d+(?:[\.,]\d+)?)\s+(.+)", line)
+
+        if m1:
+            qty = float(m1.group(1).replace(",", "."))
+            name = m1.group(3)
+
             food = find_food(name)
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "100g":
                 return None, f"{name} es unidad"
+
             total += (qty / 100) * float(food["valor_kcal"])
 
-        elif m_u:
-            qty = float(m_u.group(1))
-            name = m_u.group(2)
+        elif m2:
+            name = m2.group(1)
+            qty = float(m2.group(2).replace(",", "."))
+
+            food = find_food(name)
+            if food is None:
+                return None, f"No existe: {name}"
+            if food["tipo"] != "100g":
+                return None, f"{name} es unidad"
+
+            total += (qty / 100) * float(food["valor_kcal"])
+
+        elif m3:
+            qty = float(m3.group(1).replace(",", "."))
+            name = m3.group(2)
+
             food = find_food(name)
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "unidad":
                 return None, f"{name} es 100g"
+
             total += qty * float(food["valor_kcal"])
+
         else:
             return None, f"No pude interpretar: {line}"
 
