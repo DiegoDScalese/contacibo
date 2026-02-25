@@ -27,6 +27,10 @@ sheet = client.open("ContaCibo_DB")
 foods_ws = sheet.worksheet("foods")
 logs_ws = sheet.worksheet("logs")
 
+# =========================
+# LOAD DATA (CACHED)
+# =========================
+
 @st.cache_data
 def load_foods():
     df = pd.DataFrame(foods_ws.get_all_records())
@@ -46,12 +50,14 @@ def load_foods():
     df.loc[df["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
     return df
 
+
 @st.cache_data
 def load_logs():
     df = pd.DataFrame(logs_ws.get_all_records())
     if df.empty:
         return pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
     return df
+
 
 foods = load_foods()
 logs = load_logs()
@@ -73,22 +79,24 @@ mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"], horizontal=Tr
 if mode == "Calcular":
 
     if "rows_count" not in st.session_state:
-        st.session_state.rows_count = 4  # 4 alimentos + kcal libre
+        st.session_state.rows_count = 4
+
+    if "pending_total" not in st.session_state:
+        st.session_state.pending_total = None
+        st.session_state.pending_detalle = None
+        st.session_state.pending_meal = None
 
     meal = st.selectbox("Comida", MEALS)
 
     st.divider()
 
-    # Fila 1: kcal libres
     kcal_libres = st.number_input("Kcal libres", min_value=0.0)
 
-    total = 0.0
-    detalle = []
+    rows_data = []
 
-    # Filas alimentos
     for i in range(st.session_state.rows_count):
 
-        col1, col2 = st.columns([4,1])  # alimento grande, cantidad chica
+        col1, col2 = st.columns([4,1])
 
         with col1:
             alimento = st.selectbox(
@@ -104,15 +112,7 @@ if mode == "Calcular":
                 key=f"qty_{i}"
             )
 
-        if alimento and cantidad > 0:
-            food_row = foods[foods["alimento"] == alimento].iloc[0]
-
-            if food_row["tipo"] == "100g":
-                total += (cantidad / 100.0) * float(food_row["valor_kcal"])
-            else:
-                total += cantidad * float(food_row["valor_kcal"])
-
-            detalle.append(f"{alimento} {cantidad}")
+        rows_data.append((alimento, cantidad))
 
     col1, col2 = st.columns(2)
 
@@ -122,15 +122,34 @@ if mode == "Calcular":
             st.rerun()
 
     with col2:
-        calcular = st.button("Calcular")
+        if st.button("Calcular"):
 
-    if calcular:
+            total = 0.0
+            detalle = []
 
-        if kcal_libres > 0:
-            total += kcal_libres
-            detalle.append(f"{kcal_libres} kcal libres")
+            for alimento, cantidad in rows_data:
+                if alimento and cantidad > 0:
+                    food_row = foods[foods["alimento"] == alimento].iloc[0]
 
-        st.success(f"{meal.capitalize()} = {round(total)} kcal")
+                    if food_row["tipo"] == "100g":
+                        total += (cantidad / 100.0) * float(food_row["valor_kcal"])
+                    else:
+                        total += cantidad * float(food_row["valor_kcal"])
+
+                    detalle.append(f"{alimento} {cantidad}")
+
+            if kcal_libres > 0:
+                total += kcal_libres
+                detalle.append(f"{kcal_libres} kcal libres")
+
+            st.session_state.pending_total = total
+            st.session_state.pending_detalle = detalle
+            st.session_state.pending_meal = meal
+
+    # Mostrar resultado si existe
+    if st.session_state.pending_total is not None:
+
+        st.success(f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal")
 
         if st.button("Guardar"):
 
@@ -141,13 +160,18 @@ if mode == "Calcular":
                 new_id,
                 str(date.today()),
                 str(datetime.now()),
-                meal,
-                float(total),
-                "\n".join(detalle)
+                st.session_state.pending_meal,
+                float(st.session_state.pending_total),
+                "\n".join(st.session_state.pending_detalle)
             ])
 
             load_logs.clear()
+
             st.success("Guardado ✅")
+
+            st.session_state.pending_total = None
+            st.session_state.pending_detalle = None
+            st.session_state.pending_meal = None
 
 # =========================
 # AGREGAR ALIMENTO
@@ -201,9 +225,10 @@ if mode == "Ver hoy":
             st.divider()
             st.write(f"**Total del día:** {round(total_dia)} kcal")
 
-            gym = st.toggle("Fui al gimnasio")
-            meta = 1950 if gym else 1700
-            restante = meta - total_dia
+            # Mostrar ambas metas
+            restante_sin_gym = 1700 - total_dia
+            restante_con_gym = 1950 - total_dia
 
-            st.write(f"Meta: {meta} kcal")
-            st.write(f"Restantes: {round(restante)} kcal")
+            st.write("------")
+            st.write(f"Meta sin gym (1700): {round(restante_sin_gym)} kcal restantes")
+            st.write(f"Meta con gym (1950): {round(restante_con_gym)} kcal restantes")
