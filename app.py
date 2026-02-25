@@ -308,11 +308,14 @@ if "edit_log_id" not in st.session_state:
     st.session_state.edit_log_id = None  # si no es None, guardamos actualizando esa fila
 
 st.title("🍽️ ContaCibo")
+if "mode_selector" not in st.session_state:
+    st.session_state.mode_selector = "Calcular"
+
 mode = st.radio(
     "Modo",
     ["Calcular", "Agregar alimento", "Ver hoy", "Resumen"],
     horizontal=True,
-    key="mode"
+    key="mode_selector"
 )
 
 # ==================================================
@@ -626,7 +629,7 @@ if mode == "Ver hoy":
                         else:
                             st.session_state.prefill_items = None  # sin estructura, queda vacío
 
-                        st.session_state.mode = "Calcular"
+                        st.session_state.mode_selector = "Calcular"
                         st.success("Editando comida...")
                         st.rerun()
 
