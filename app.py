@@ -137,6 +137,12 @@ mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"])
 
 # -------- CALCULAR --------
 if mode == "Calcular":
+
+    if "pending_total" not in st.session_state:
+        st.session_state.pending_total = None
+        st.session_state.pending_meal = None
+        st.session_state.pending_text = None
+
     meal = st.selectbox("Comida", MEALS)
     text = st.text_area("Ingresa alimentos (uno por línea)")
 
@@ -145,20 +151,34 @@ if mode == "Calcular":
         if error:
             st.error(error)
         else:
+            st.session_state.pending_total = total
+            st.session_state.pending_meal = meal
+            st.session_state.pending_text = text
             st.success(f"{meal.capitalize()} = {round(total)} kcal")
 
-            if st.button("Guardar"):
-                new_id = int(logs["id"].max()) + 1 if not logs.empty else 1
-                logs_ws.append_row([
-                    new_id,
-                    str(date.today()),
-                    str(datetime.now()),
-                    meal,
-                    float(total),
-                    text
-                ])
-                st.success("Guardado ✅")
+    # Mostrar botón Guardar si ya se calculó algo
+    if st.session_state.pending_total is not None:
 
+        st.info(f"Total pendiente: {round(st.session_state.pending_total)} kcal")
+
+        if st.button("Guardar"):
+            new_id = int(logs["id"].max()) + 1 if not logs.empty else 1
+
+            logs_ws.append_row([
+                new_id,
+                str(date.today()),
+                str(datetime.now()),
+                st.session_state.pending_meal,
+                float(st.session_state.pending_total),
+                st.session_state.pending_text
+            ])
+
+            st.success("Guardado ✅")
+
+            # Reset estado
+            st.session_state.pending_total = None
+            st.session_state.pending_meal = None
+            st.session_state.pending_text = None
 # -------- AGREGAR --------
 if mode == "Agregar alimento":
     nombre = st.text_input("Nombre")
