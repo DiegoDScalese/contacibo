@@ -308,7 +308,12 @@ if "edit_log_id" not in st.session_state:
     st.session_state.edit_log_id = None  # si no es None, guardamos actualizando esa fila
 
 st.title("🍽️ ContaCibo")
-mode = st.radio("Modo", ["Calcular", "Agregar alimento", "Ver hoy", "Resumen"], horizontal=True)
+mode = st.radio(
+    "Modo",
+    ["Calcular", "Agregar alimento", "Ver hoy", "Resumen"],
+    horizontal=True,
+    key="mode"
+)
 
 # ==================================================
 # CALCULAR
@@ -621,7 +626,8 @@ if mode == "Ver hoy":
                         else:
                             st.session_state.prefill_items = None  # sin estructura, queda vacío
 
-                        st.success("Listo: estás editando esa comida en 'Calcular'.")
+                        st.session_state.mode = "Calcular"
+                        st.success("Editando comida...")
                         st.rerun()
 
                 # ELIMINAR
@@ -633,7 +639,7 @@ if mode == "Ver hoy":
                         else:
                             logs_ws.delete_rows(target_row)
                             load_logs_df.clear()
-                            st.success("Eliminado ✅")
+                            st.success(f"ID {log_id} eliminado ✅")
                             st.rerun()
 
                 st.divider()
