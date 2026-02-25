@@ -40,6 +40,9 @@ foods["valor_kcal"] = (
     .astype(float)
 )
 
+# Si Sheets interpretó "220,00" como 22000, lo corregimos (÷100)
+foods.loc[foods["valor_kcal"] > 2000, "valor_kcal"] = foods.loc[foods["valor_kcal"] > 2000, "valor_kcal"] / 100.0
+
 MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
 
 # =========================
