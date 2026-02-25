@@ -28,7 +28,7 @@ logs_ws = sheet.worksheet("logs")
 foods = pd.DataFrame(foods_ws.get_all_records())
 logs = pd.DataFrame(logs_ws.get_all_records())
 
-# Si logs está vacío
+# Si logs vacío
 if logs.empty:
     logs = pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
 
@@ -43,7 +43,7 @@ foods["valor_kcal"] = (
     .astype(float)
 )
 
-# Corregir si Sheets convirtió 220,00 → 22000
+# Corregir error Sheets 220,00 → 22000
 foods.loc[foods["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
 
 MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
@@ -62,59 +62,66 @@ mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"])
 
 if mode == "Calcular":
 
-    meal = st.selectbox("Comida", MEALS)
+    if "rows_count" not in st.session_state:
+        st.session_state.rows_count = 5
 
-    total = 0.0
-    rows = []
+    meal = st.selectbox("Comida", MEALS)
 
     st.subheader("Agregar alimentos")
 
-    for i in range(1,6):
+    rows_data = []
+
+    for i in range(st.session_state.rows_count):
 
         col1, col2 = st.columns([2,1])
 
         with col1:
-            if i < 5:
-                alimento = st.selectbox(
-                    f"Alimento {i}",
-                    options=[""] + sorted(foods["alimento"].tolist()),
-                    key=f"food_{i}"
-                )
-            else:
-                alimento = "libre"
+            alimento = st.selectbox(
+                f"Alimento {i+1}",
+                options=[""] + sorted(foods["alimento"].tolist()),
+                key=f"food_{i}"
+            )
 
         with col2:
-            if i < 5:
-                cantidad = st.number_input(
-                    f"Cantidad {i}",
-                    min_value=0.0,
-                    key=f"qty_{i}"
-                )
-            else:
-                cantidad = st.number_input(
-                    "Kcal libres",
-                    min_value=0.0,
-                    key="free_kcal"
-                )
+            cantidad = st.number_input(
+                f"Cantidad {i+1}",
+                min_value=0.0,
+                key=f"qty_{i}"
+            )
 
-        if i < 5 and alimento and cantidad > 0:
-            food_row = foods[foods["alimento"] == alimento].iloc[0]
+        rows_data.append((alimento, cantidad))
 
-            if food_row["tipo"] == "100g":
-                total += (cantidad / 100.0) * float(food_row["valor_kcal"])
-            else:
-                total += cantidad * float(food_row["valor_kcal"])
+    kcal_libres = st.number_input("Kcal libres", min_value=0.0)
 
-            rows.append(f"{alimento} {cantidad}")
-
-        if i == 5 and cantidad > 0:
-            total += cantidad
-            rows.append(f"{cantidad} kcal libres")
+    if st.button("➕ Agregar fila"):
+        st.session_state.rows_count += 1
+        st.rerun()
 
     if st.button("Calcular"):
+
+        total = 0.0
+        detalle = []
+
+        for alimento, cantidad in rows_data:
+            if alimento and cantidad > 0:
+                food_row = foods[foods["alimento"] == alimento].iloc[0]
+
+                if food_row["tipo"] == "100g":
+                    total += (cantidad / 100.0) * float(food_row["valor_kcal"])
+                else:
+                    total += cantidad * float(food_row["valor_kcal"])
+
+                detalle.append(f"{alimento} {cantidad}")
+
+        if kcal_libres > 0:
+            total += kcal_libres
+            detalle.append(f"{kcal_libres} kcal libres")
+
         st.success(f"{meal.capitalize()} = {round(total)} kcal")
 
         if st.button("Guardar"):
+
+            logs = pd.DataFrame(logs_ws.get_all_records())
             new_id = int(logs["id"].max()) + 1 if not logs.empty else 1
 
             logs_ws.append_row([
@@ -123,7 +130,7 @@ if mode == "Calcular":
                 str(datetime.now()),
                 meal,
                 float(total),
-                "\n".join(rows)
+                "\n".join(detalle)
             ])
 
             st.success("Guardado ✅")
@@ -139,6 +146,7 @@ if mode == "Agregar alimento":
     valor = st.number_input("Valor kcal", min_value=0.0)
 
     if st.button("Guardar alimento"):
+
         existing = foods[foods["alimento"] == nombre.lower().strip()]
 
         if not existing.empty:
@@ -158,7 +166,6 @@ if mode == "Agregar alimento":
 if mode == "Ver hoy":
 
     today = str(date.today())
-
     logs = pd.DataFrame(logs_ws.get_all_records())
 
     if logs.empty:
@@ -171,8 +178,18 @@ if mode == "Ver hoy":
         else:
             resumen = today_logs.groupby("meal")["total_kcal"].sum()
 
+            total_dia = resumen.sum()
+
             for meal_name, kcal in resumen.items():
                 st.write(f"**{meal_name.capitalize()}**: {round(kcal)} kcal")
 
             st.write("---")
-            st.write(f"**Total del día:** {round(resumen.sum())} kcal")
+            st.write(f"**Total del día:** {round(total_dia)} kcal")
+
+            gym = st.toggle("Fui al gimnasio hoy?")
+            meta = 1950 if gym else 1700
+
+            restante = meta - total_dia
+
+            st.write(f"Meta diaria: {meta} kcal")
+            st.write(f"Restantes: {round(restante)} kcal")
