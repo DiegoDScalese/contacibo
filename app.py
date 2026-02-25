@@ -32,26 +32,19 @@ foods_ws, logs_ws = get_sheets()
 
 
 # ==================================================
-# LIMPIEZA NUMÉRICA CORRECTA
+# LIMPIEZA NUMÉRICA CORRECTA (SIN INFLAR DECIMALES)
 # ==================================================
 
 def to_float_safe(x):
-    """
-    Convierte números con:
-    - coma decimal
-    - punto decimal
-    - separadores de miles
-    sin inflar valores
-    """
     s = str(x).strip()
 
-    if "," in s and "." in s:
-        # Caso tipo 1.234,56
+    # Caso europeo: 1.234,56
+    if "." in s and "," in s:
         s = s.replace(".", "").replace(",", ".")
+    # Caso coma decimal: 123,45
     elif "," in s:
-        # Caso 123,45
         s = s.replace(",", ".")
-    # Si tiene solo punto, lo dejamos como está
+    # Caso normal con punto decimal: no tocar
 
     return float(s)
 
@@ -112,7 +105,12 @@ if mode == "Calcular":
 
     st.divider()
 
-    kcal_libres = st.number_input("Kcal libres", min_value=0.0)
+    kcal_libres = st.number_input(
+        "Kcal libres",
+        min_value=0,
+        step=1,
+        format="%d"
+    )
 
     rows_data = []
 
@@ -130,7 +128,9 @@ if mode == "Calcular":
         with col2:
             cantidad = st.number_input(
                 "Cant.",
-                min_value=0.0,
+                min_value=0,
+                step=1,
+                format="%d",
                 key=f"qty_{i}"
             )
 
@@ -163,12 +163,15 @@ if mode == "Calcular":
 
                 total += kcal_item
 
-                # 🔥 MOSTRAR DETALLE EN KCAL
-                detalle_kcal.append(f"{alimento}: {round(kcal_item)} kcal")
+                detalle_kcal.append(
+                    f"{alimento}: {round(kcal_item)} kcal"
+                )
 
         if kcal_libres > 0:
             total += kcal_libres
-            detalle_kcal.append(f"Kcal libres: {round(kcal_libres)} kcal")
+            detalle_kcal.append(
+                f"Kcal libres: {kcal_libres} kcal"
+            )
 
         st.success(f"{meal.capitalize()} = {round(total)} kcal")
 
@@ -186,14 +189,13 @@ if mode == "Calcular":
                 str(date.today()),
                 str(datetime.now()),
                 meal,
-                round(total,2),
+                round(total, 2),
                 "\n".join(detalle_kcal)
             ])
 
             load_logs.clear()
 
             st.success("Guardado ✅")
-
 
 # ==================================================
 # VER HOY
@@ -220,7 +222,9 @@ if mode == "Ver hoy":
 
                 meal_total = meal_logs["total_kcal"].sum()
 
-                st.subheader(f"{meal_name.capitalize()} — {round(meal_total)} kcal")
+                st.subheader(
+                    f"{meal_name.capitalize()} — {round(meal_total)} kcal"
+                )
 
                 for _, row in meal_logs.iterrows():
                     st.code(row["detalle"])
@@ -228,5 +232,9 @@ if mode == "Ver hoy":
         st.divider()
         st.subheader(f"Total del día: {round(total_dia)} kcal")
 
-        st.write(f"Meta sin gym (1700): {round(1700 - total_dia)} kcal restantes")
-        st.write(f"Meta con gym (1950): {round(1950 - total_dia)} kcal restantes")
+        st.write(
+            f"Meta sin gym (1700): {round(1700 - total_dia)} kcal restantes"
+        )
+        st.write(
+            f"Meta con gym (1950): {round(1950 - total_dia)} kcal restantes"
+        )
