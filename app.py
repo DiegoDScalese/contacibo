@@ -454,11 +454,11 @@ if mode == "Calcular":
                 min_value=0,
                 step=1,
                 format="%d",
-                value=int(default_val),
+                value=None if default_val == 0 else int(default_val),
                 key=f"{calc_mode}_val_{i}",
             )
 
-        rows_data.append((alimento, int(val)))
+        rows_data.append((alimento, int(val) if val is not None else 0))
 
     # consumimos el prefill para no “reinyectar” siempre
     if prefill_items is not None:
