@@ -74,58 +74,76 @@ def find_food(name):
         return None
     return row.iloc[0]
 
-def calc_meal(text):
+# -------- CALCULAR --------
+if mode == "Calcular":
+
+    meal = st.selectbox("Comida", MEALS)
+
+    st.subheader("Agregar alimentos")
+
     total = 0.0
-    lines = text.strip().split("\n")
+    rows = []
 
-    for line in lines:
-        line = line.strip().lower()
-        if not line:
-            continue
+    for i in range(1, 6):
 
-        # ✅ Caso: "250kc" o "250 kcal" (kcal directas)
-        m_kc = re.match(r"^\s*(\d+(?:[\.,]\d+)?)\s*(kc|kcal)\s*$", line)
-        if m_kc:
-            qty_kcal = float(m_kc.group(1).replace(",", "."))
-            total += qty_kcal
-            continue
+        st.markdown(f"### Item {i}")
 
-        # ✅ Caso: "alimento 480 g" o "alimento 480 gr" o "alimento 480g"
-        m_weight = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)\s*$", line)
+        col1, col2 = st.columns([2,1])
 
-        # ✅ Caso: "alimento 1" (unidad)
-        m_unit = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*$", line)
+        with col1:
+            if i < 5:
+                alimento = st.selectbox(
+                    f"Alimento {i}",
+                    options=[""] + sorted(foods["alimento"].tolist()),
+                    key=f"food_{i}"
+                )
+            else:
+                alimento = "libre"
 
-        if m_weight:
-            name = m_weight.group(1).strip()
-            qty = float(m_weight.group(2).replace(",", "."))
+        with col2:
+            if i < 5:
+                cantidad = st.number_input(
+                    f"Cantidad {i}",
+                    min_value=0.0,
+                    key=f"qty_{i}"
+                )
+            else:
+                cantidad = st.number_input(
+                    "Kcal libres",
+                    min_value=0.0,
+                    key="free_kcal"
+                )
 
-            food = find_food(name)
-            if food is None:
-                return None, f"No existe: {name}"
-            if food["tipo"] != "100g":
-                return None, f"{name} es unidad (ej: '{name} 1')"
+        if i < 5 and alimento and cantidad > 0:
+            food_row = foods[foods["alimento"] == alimento].iloc[0]
 
-            kcal_value = float(food["valor_kcal"])
-            total += (qty / 100.0) * kcal_value
+            if food_row["tipo"] == "100g":
+                total += (cantidad / 100.0) * float(food_row["valor_kcal"])
+            else:
+                total += cantidad * float(food_row["valor_kcal"])
 
-        elif m_unit:
-            name = m_unit.group(1).strip()
-            qty = float(m_unit.group(2).replace(",", "."))
+            rows.append(f"{alimento} {cantidad}")
 
-            food = find_food(name)
-            if food is None:
-                return None, f"No existe: {name}"
-            if food["tipo"] != "unidad":
-                return None, f"{name} es 100g (ej: '{name} 200 g')"
+        if i == 5 and cantidad > 0:
+            total += cantidad
+            rows.append(f"{cantidad} kcal libres")
 
-            kcal_value = float(food["valor_kcal"])
-            total += qty * kcal_value
+    if st.button("Calcular"):
+        st.success(f"{meal.capitalize()} = {round(total)} kcal")
 
-        else:
-            return None, f"No pude interpretar: {line}"
+        if st.button("Guardar"):
+            new_id = int(logs["id"].max()) + 1 if not logs.empty else 1
 
-    return total, None
+            logs_ws.append_row([
+                new_id,
+                str(date.today()),
+                str(datetime.now()),
+                meal,
+                float(total),
+                "\n".join(rows)
+            ])
+
+            st.success("Guardado ✅")
 
 # =========================
 # UI
