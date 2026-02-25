@@ -131,7 +131,7 @@ def calc_meal(text):
 # UI
 # =========================
 
-st.title("🇮🇹 ContaCibo")
+st.title("ContaCibo")
 
 mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"])
 
