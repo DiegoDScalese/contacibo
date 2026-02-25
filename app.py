@@ -307,6 +307,11 @@ if "pending_total" not in st.session_state:
 if "edit_log_id" not in st.session_state:
     st.session_state.edit_log_id = None  # si no es None, guardamos actualizando esa fila
 
+# Cambio de modo programático (si viene de editar)
+if st.session_state.get("force_mode"):
+    st.session_state.mode_selector = st.session_state.force_mode
+    st.session_state.force_mode = None
+
 st.title("🍽️ ContaCibo")
 if "mode_selector" not in st.session_state:
     st.session_state.mode_selector = "Calcular"
@@ -608,29 +613,30 @@ if mode == "Ver hoy":
                 # EDITAR (edición real si hay detalle_json válido; si no, igual permite editar pero vacío)
                 with b1:
                     if st.button("✏️ Editar", key=f"edit_{log_id}"):
+                
                         payload = None
                         try:
                             payload = json.loads(r["detalle_json"]) if str(r["detalle_json"]).strip() else None
                         except Exception:
                             payload = None
-
+                
                         st.session_state.edit_log_id = log_id
                         st.session_state.pending_total = None
                         st.session_state.pending_detail = None
                         st.session_state.pending_payload = None
                         st.session_state.pending_meal = r["meal"]
-
+                
                         # Prefill
                         st.session_state.prefill_meal = r["meal"]
                         st.session_state.prefill_kcal_libres = int(r.get("kcal_libres", 0))
-
+                
                         if payload and isinstance(payload, dict) and isinstance(payload.get("items", []), list):
                             st.session_state.prefill_items = payload["items"]
                         else:
-                            st.session_state.prefill_items = None  # sin estructura, queda vacío
-
-                        st.session_state.mode_selector = "Calcular"
-                        st.success("Editando comida...")
+                            st.session_state.prefill_items = None
+                
+                        # 🔥 Solo esto:
+                        st.session_state.force_mode = "Calcular"
                         st.rerun()
 
                 # ELIMINAR
