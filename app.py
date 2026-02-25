@@ -73,48 +73,33 @@ def calc_meal(text):
         if not line:
             continue
 
-        # 480g calabaza
-        m1 = re.match(r"(\d+(?:[\.,]\d+)?)\s*(g|gr)\s+(.+)", line)
+        # Caso: "alimento 480 g" o "alimento 480 gr" o "alimento 480g"
+        m_weight = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)\s*$", line)
 
-        # calabaza 480g
-        m2 = re.match(r"(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)", line)
+        # Caso: "alimento 1" (unidad)
+        m_unit = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*$", line)
 
-        # 1 huevo
-        m3 = re.match(r"(\d+(?:[\.,]\d+)?)\s+(.+)", line)
-
-        if m1:
-            qty = float(m1.group(1).replace(",", "."))
-            name = m1.group(3)
+        if m_weight:
+            name = m_weight.group(1).strip()
+            qty = float(m_weight.group(2).replace(",", "."))
 
             food = find_food(name)
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "100g":
-                return None, f"{name} es unidad"
+                return None, f"{name} es unidad (ej: '{name} 1')"
 
             total += (qty / 100) * float(food["valor_kcal"])
 
-        elif m2:
-            name = m2.group(1)
-            qty = float(m2.group(2).replace(",", "."))
-
-            food = find_food(name)
-            if food is None:
-                return None, f"No existe: {name}"
-            if food["tipo"] != "100g":
-                return None, f"{name} es unidad"
-
-            total += (qty / 100) * float(food["valor_kcal"])
-
-        elif m3:
-            qty = float(m3.group(1).replace(",", "."))
-            name = m3.group(2)
+        elif m_unit:
+            name = m_unit.group(1).strip()
+            qty = float(m_unit.group(2).replace(",", "."))
 
             food = find_food(name)
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "unidad":
-                return None, f"{name} es 100g"
+                return None, f"{name} es 100g (ej: '{name} 200 g')"
 
             total += qty * float(food["valor_kcal"])
 
