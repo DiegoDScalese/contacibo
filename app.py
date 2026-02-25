@@ -200,15 +200,24 @@ foods = load_foods_df()
 
 
 # ==================================================
-# CÁLCULO
+# CÁLCULO (dual)
 # ==================================================
-def calc_items(rows_data, kcal_libres: int):
+def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
+    """
+    calc_mode:
+      - "qty": rows_data = [(alimento, cantidad)]
+      - "kcal": rows_data = [(alimento, kcal_target)]
+    En modo kcal:
+      - se calcula cantidad (entera) necesaria
+      - el total = suma de kcal_target (como pidió Diego)
+      - se guarda también kcal_actual (por si querés auditar)
+    """
     total = 0.0
     detail_lines = []
-    detail_json = []
+    items = []
 
-    for alimento, cantidad in rows_data:
-        if not alimento or cantidad <= 0:
+    for alimento, val in rows_data:
+        if not alimento or val <= 0:
             continue
 
         row = foods[foods["alimento"] == alimento]
@@ -216,33 +225,74 @@ def calc_items(rows_data, kcal_libres: int):
             continue
 
         food = row.iloc[0]
-        if food["tipo"] == "100g":
-            kcal_item = (cantidad / 100.0) * float(food["valor_kcal"])
-        else:
-            kcal_item = cantidad * float(food["valor_kcal"])
+        valor_kcal = float(food["valor_kcal"])
+        tipo = str(food["tipo"]).strip().lower()
 
-        total += kcal_item
-        detail_lines.append(f"{alimento}: {round(kcal_item)} kcal")
-        detail_json.append(
-            {
-                "alimento": alimento,
-                "cantidad": int(cantidad),
-                "tipo": food["tipo"],
-                "valor_kcal": float(food["valor_kcal"]),
-                "kcal": float(kcal_item),
-            }
-        )
+        if calc_mode == "qty":
+            cantidad = int(val)
+            if tipo == "100g":
+                kcal_actual = (cantidad / 100.0) * valor_kcal
+            else:
+                kcal_actual = cantidad * valor_kcal
 
-    if kcal_libres and kcal_libres > 0:
-        total += kcal_libres
-        detail_lines.append(f"Kcal libres: {int(kcal_libres)} kcal")
+            total += kcal_actual
+            detail_lines.append(f"{alimento}: {cantidad} ({round(kcal_actual)} kcal)")
+            items.append(
+                {
+                    "alimento": alimento,
+                    "cantidad": int(cantidad),
+                    "kcal_target": None,
+                    "kcal_actual": float(kcal_actual),
+                    "tipo": tipo,
+                    "valor_kcal": valor_kcal,
+                }
+            )
 
-    payload = {
-        "items": detail_json,
-        "kcal_libres": int(kcal_libres or 0),
-    }
+        else:  # calc_mode == "kcal"
+            kcal_target = int(val)
 
-    return total, detail_lines, payload
+            # invertimos para cantidad
+            if valor_kcal <= 0:
+                continue
+
+            if tipo == "100g":
+                cantidad = int(round((kcal_target / valor_kcal) * 100.0))
+                if cantidad < 1:
+                    cantidad = 1
+                kcal_actual = (cantidad / 100.0) * valor_kcal
+                unidad_txt = "g"
+            else:
+                cantidad = int(round(kcal_target / valor_kcal))
+                if cantidad < 1:
+                    cantidad = 1
+                kcal_actual = cantidad * valor_kcal
+                unidad_txt = "u"
+
+            # total es el objetivo (como pediste)
+            total += float(kcal_target)
+
+            detail_lines.append(f"{alimento}: {kcal_target} kcal → {cantidad}{unidad_txt}")
+            items.append(
+                {
+                    "alimento": alimento,
+                    "cantidad": int(cantidad),
+                    "kcal_target": int(kcal_target),
+                    "kcal_actual": float(kcal_actual),
+                    "tipo": tipo,
+                    "valor_kcal": valor_kcal,
+                }
+            )
+
+    if calc_mode == "qty":
+        if kcal_libres and kcal_libres > 0:
+            total += float(kcal_libres)
+            detail_lines.append(f"Kcal libres: {int(kcal_libres)} kcal")
+        payload = {"calc_mode": "qty", "items": items, "kcal_libres": int(kcal_libres or 0)}
+    else:
+        # se oculta / no aplica
+        payload = {"calc_mode": "kcal", "items": items, "kcal_libres": 0}
+
+    return float(total), detail_lines, payload
 
 
 # ==================================================
@@ -252,7 +302,6 @@ def get_or_create_daily_status(fecha_str: str):
     df = load_daily_status_df()
     row = df[df["fecha"] == fecha_str]
     if row.empty:
-        # default normal
         gym = False
         meta = META_NORMAL
         daily_ws.append_row([fecha_str, "FALSE", str(meta)], value_input_option="RAW")
@@ -285,7 +334,6 @@ def upsert_daily_status(fecha_str: str, gym: bool):
     if target_row is None:
         daily_ws.append_row([fecha_str, "TRUE" if gym else "FALSE", str(meta)], value_input_option="RAW")
     else:
-        # update 3 cols
         rng = f"{gspread.utils.rowcol_to_a1(target_row, gym_col+1)}:{gspread.utils.rowcol_to_a1(target_row, meta_col+1)}"
         daily_ws.update(rng, [["TRUE" if gym else "FALSE", str(meta)]], value_input_option="RAW")
 
@@ -305,14 +353,20 @@ if "pending_total" not in st.session_state:
     st.session_state.pending_meal = None
 
 if "edit_log_id" not in st.session_state:
-    st.session_state.edit_log_id = None  # si no es None, guardamos actualizando esa fila
+    st.session_state.edit_log_id = None
 
 # Cambio de modo programático (si viene de editar)
 if st.session_state.get("force_mode"):
     st.session_state.mode_selector = st.session_state.force_mode
     st.session_state.force_mode = None
 
+# Cambio programático del modo de cálculo dentro de Calcular (qty/kcal)
+if st.session_state.get("force_calc_mode"):
+    st.session_state.calc_mode_selector = st.session_state.force_calc_mode
+    st.session_state.force_calc_mode = None
+
 st.title("🍽️ ContaCibo")
+
 if "mode_selector" not in st.session_state:
     st.session_state.mode_selector = "Calcular"
 
@@ -327,6 +381,19 @@ mode = st.radio(
 # CALCULAR
 # ==================================================
 if mode == "Calcular":
+
+    # selector de modo de cálculo (nuevo)
+    if "calc_mode_selector" not in st.session_state:
+        st.session_state.calc_mode_selector = "Cantidad → Kcal"
+
+    calc_mode_label = st.radio(
+        "Modo de cálculo",
+        ["Cantidad → Kcal", "Kcal → Cantidad"],
+        horizontal=True,
+        key="calc_mode_selector",
+    )
+    calc_mode = "qty" if calc_mode_label.startswith("Cantidad") else "kcal"
+
     # meal (si venimos de editar, puede estar precargada)
     default_meal = st.session_state.get("prefill_meal", MEALS[0])
     if default_meal not in MEALS:
@@ -334,28 +401,43 @@ if mode == "Calcular":
     meal = st.selectbox("Comida", MEALS, index=MEALS.index(default_meal))
     st.divider()
 
-    kcal_libres_default = int(st.session_state.get("prefill_kcal_libres", 0))
-    kcal_libres = st.number_input("Kcal libres", min_value=0, step=1, format="%d", value=kcal_libres_default)
+    # kcal_libres: solo en qty
+    kcal_libres = 0
+    if calc_mode == "qty":
+        kcal_libres_default = int(st.session_state.get("prefill_kcal_libres", 0))
+        kcal_libres = st.number_input("Kcal libres", min_value=0, step=1, format="%d", value=kcal_libres_default)
+    else:
+        # oculto, pero limpiamos prefill para evitar confusiones
+        kcal_libres = 0
 
-    # Si hay prefill de items, los usamos una vez
     prefill_items = st.session_state.get("prefill_items", None)
 
     rows_data = []
     foods_list = [""] + sorted(foods["alimento"].tolist())
 
-    # si hay prefill, ajustamos rows_count para que entren
     if prefill_items is not None:
         st.session_state.rows_count = max(st.session_state.rows_count, len(prefill_items))
 
     for i in range(st.session_state.rows_count):
         col1, col2 = st.columns([4, 1])
 
-        # defaults para prefill
         default_food = ""
-        default_qty = 0
+        default_val = 0
+
         if prefill_items is not None and i < len(prefill_items):
             default_food = str(prefill_items[i].get("alimento", "")).strip().lower()
-            default_qty = int(prefill_items[i].get("cantidad", 0))
+
+            # si el item trae calc_mode viejo, intentamos inferir
+            # - si estamos en qty: usar cantidad
+            # - si estamos en kcal: usar kcal_target si existe, si no kcal_actual redondeado
+            if calc_mode == "qty":
+                default_val = int(prefill_items[i].get("cantidad", 0) or 0)
+            else:
+                kt = prefill_items[i].get("kcal_target", None)
+                if kt is None or str(kt).strip() in ("", "None"):
+                    default_val = int(round(float(prefill_items[i].get("kcal_actual", 0) or 0)))
+                else:
+                    default_val = int(kt)
 
         with col1:
             alimento = st.selectbox(
@@ -365,16 +447,18 @@ if mode == "Calcular":
                 key=f"food_{i}",
             )
         with col2:
-            cantidad = st.number_input(
-                "Cant.",
+            label = "Cant." if calc_mode == "qty" else "Kcal"
+            # keys separadas por modo para no mezclar estados
+            val = st.number_input(
+                label,
                 min_value=0,
                 step=1,
                 format="%d",
-                value=int(default_qty),
-                key=f"qty_{i}",
+                value=int(default_val),
+                key=f"{calc_mode}_val_{i}",
             )
 
-        rows_data.append((alimento, int(cantidad)))
+        rows_data.append((alimento, int(val)))
 
     # consumimos el prefill para no “reinyectar” siempre
     if prefill_items is not None:
@@ -388,7 +472,7 @@ if mode == "Calcular":
 
     with c2:
         if st.button("Calcular"):
-            total, detail_lines, payload = calc_items(rows_data, int(kcal_libres))
+            total, detail_lines, payload = calc_items_dual(rows_data, int(kcal_libres), calc_mode)
             st.session_state.pending_total = float(total)
             st.session_state.pending_detail = detail_lines
             st.session_state.pending_payload = payload
@@ -405,6 +489,7 @@ if mode == "Calcular":
                 st.session_state.prefill_meal = MEALS[0]
                 st.session_state.prefill_kcal_libres = 0
                 st.session_state.prefill_items = None
+                st.session_state.force_calc_mode = "Cantidad → Kcal"
                 st.success("Edición cancelada.")
                 st.rerun()
 
@@ -417,7 +502,7 @@ if mode == "Calcular":
                 f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal"
             )
 
-        st.write("Detalle (kcal):")
+        st.write("Detalle:")
         for line in st.session_state.pending_detail:
             st.write("-", line)
 
@@ -429,6 +514,7 @@ if mode == "Calcular":
 
             meal_str = st.session_state.pending_meal
             total_str = f"{st.session_state.pending_total:.2f}"
+
             detalle_str = "\n".join(st.session_state.pending_detail)
             kcal_libres_str = str(int(st.session_state.pending_payload.get("kcal_libres", 0)))
             detalle_json_str = json.dumps(st.session_state.pending_payload, ensure_ascii=False)
@@ -450,7 +536,6 @@ if mode == "Calcular":
                 )
                 st.success("Guardado ✅")
             else:
-                # update fila existente por ID
                 target_id = int(st.session_state.edit_log_id)
                 target_row = find_row_index_by_id(logs_ws, target_id)
                 if target_row is None:
@@ -458,7 +543,7 @@ if mode == "Calcular":
                 else:
                     values = logs_ws.get_all_values()
                     header = [h.strip() for h in values[0]]
-                    # indices
+
                     fecha_col = header.index("fecha") + 1
                     ts_col = header.index("timestamp") + 1
                     meal_col = header.index("meal") + 1
@@ -467,7 +552,6 @@ if mode == "Calcular":
                     kcal_libres_col = header.index("kcal_libres") + 1
                     detalle_json_col = header.index("detalle_json") + 1
 
-                    # update de fecha..detalle_json (rango continuo)
                     start_col = fecha_col
                     end_col = detalle_json_col
                     rng = f"{gspread.utils.rowcol_to_a1(target_row, start_col)}:{gspread.utils.rowcol_to_a1(target_row, end_col)}"
@@ -490,6 +574,7 @@ if mode == "Calcular":
             st.session_state.prefill_meal = MEALS[0]
             st.session_state.prefill_kcal_libres = 0
             st.session_state.prefill_items = None
+            st.session_state.force_calc_mode = "Cantidad → Kcal"
 
             st.rerun()
 
@@ -553,7 +638,6 @@ if mode == "Agregar alimento":
 if mode == "Ver hoy":
     hoy = str(date.today())
 
-    # estado del día
     gym_current, meta_current = get_or_create_daily_status(hoy)
 
     st.subheader("Estado del día")
@@ -580,7 +664,6 @@ if mode == "Ver hoy":
         st.info("No hay registros hoy.")
         st.write(f"Meta hoy: **{meta_current}** kcal")
     else:
-        # Totales por comida
         resumen = today_logs.groupby("meal")["total_kcal"].sum()
         total_dia = float(today_logs["total_kcal"].sum())
         delta = float(total_dia - meta_current)
@@ -592,7 +675,6 @@ if mode == "Ver hoy":
 
         st.divider()
 
-        # Mostrar por comida, con acciones por fila (id)
         for meal_name in MEALS:
             sub = today_logs[today_logs["meal"] == meal_name].sort_values("id")
             if sub.empty:
@@ -610,36 +692,36 @@ if mode == "Ver hoy":
 
                 b1, b2 = st.columns(2)
 
-                # EDITAR (edición real si hay detalle_json válido; si no, igual permite editar pero vacío)
                 with b1:
                     if st.button("✏️ Editar", key=f"edit_{log_id}"):
-                
+
                         payload = None
                         try:
                             payload = json.loads(r["detalle_json"]) if str(r["detalle_json"]).strip() else None
                         except Exception:
                             payload = None
-                
+
                         st.session_state.edit_log_id = log_id
                         st.session_state.pending_total = None
                         st.session_state.pending_detail = None
                         st.session_state.pending_payload = None
                         st.session_state.pending_meal = r["meal"]
-                
-                        # Prefill
+
                         st.session_state.prefill_meal = r["meal"]
                         st.session_state.prefill_kcal_libres = int(r.get("kcal_libres", 0))
-                
+
                         if payload and isinstance(payload, dict) and isinstance(payload.get("items", []), list):
                             st.session_state.prefill_items = payload["items"]
+                            # set calc mode desde payload
+                            cm = payload.get("calc_mode", "qty")
+                            st.session_state.force_calc_mode = "Kcal → Cantidad" if cm == "kcal" else "Cantidad → Kcal"
                         else:
                             st.session_state.prefill_items = None
-                
-                        # 🔥 Solo esto:
+                            st.session_state.force_calc_mode = "Cantidad → Kcal"
+
                         st.session_state.force_mode = "Calcular"
                         st.rerun()
 
-                # ELIMINAR
                 with b2:
                     if st.button("🗑️ Eliminar", key=f"del_{log_id}"):
                         target_row = find_row_index_by_id(logs_ws, log_id)
@@ -653,7 +735,6 @@ if mode == "Ver hoy":
 
                 st.divider()
 
-        # resumen final
         st.subheader(f"Total del día: {round(total_dia)} kcal")
         st.write(f"Delta vs meta: **{'+' if delta>0 else ''}{round(delta)} kcal**")
 
@@ -668,11 +749,9 @@ if mode == "Resumen":
     if logs_all.empty:
         st.info("Todavía no hay datos en logs.")
     else:
-        # agregamos total por fecha
         by_day = logs_all.groupby("fecha", as_index=False)["total_kcal"].sum()
         by_day["total_kcal"] = by_day["total_kcal"].astype(float)
 
-        # join con daily_status
         if not daily_all.empty:
             merged = by_day.merge(daily_all[["fecha", "gym", "meta"]], on="fecha", how="left")
         else:
@@ -680,7 +759,6 @@ if mode == "Resumen":
             merged["gym"] = False
             merged["meta"] = None
 
-        # defaults si no hay status
         def infer_meta(row):
             if pd.notna(row.get("meta")) and int(row["meta"]) > 0:
                 return int(row["meta"])
@@ -691,14 +769,12 @@ if mode == "Resumen":
         merged["meta"] = merged.apply(infer_meta, axis=1)
         merged["delta"] = merged["total_kcal"] - merged["meta"]
 
-        # ordenar por fecha (ISO strings)
         merged = merged.sort_values("fecha").reset_index(drop=True)
 
         view = st.radio("Vista", ["Diario", "Semanal", "Mensual"], horizontal=True)
         st.divider()
 
         if view == "Diario":
-            # selector de fecha
             fechas = merged["fecha"].tolist()
             sel = st.selectbox("Fecha", options=fechas, index=len(fechas) - 1)
             row = merged[merged["fecha"] == sel].iloc[0]
@@ -710,7 +786,6 @@ if mode == "Resumen":
             c3.metric("Delta", f"{'+' if d>0 else ''}{round(d)} kcal")
             c4.metric("Gym", "Sí" if bool(row["gym"]) else "No")
 
-            # detalle por comidas ese día
             logs_day = logs_all[logs_all["fecha"] == sel].copy()
             if not logs_day.empty:
                 st.subheader("Por comida")
@@ -718,14 +793,11 @@ if mode == "Resumen":
                 st.bar_chart(by_meal)
 
         elif view == "Semanal":
-            # semana: últimos 7 días disponibles (según datos)
-            # Usamos ventana móvil: elegís fecha fin
             fechas = merged["fecha"].tolist()
             end_sel = st.selectbox("Semana terminando en", options=fechas, index=len(fechas) - 1)
             end_dt = datetime.fromisoformat(end_sel).date()
             start_dt = end_dt - timedelta(days=6)
 
-            # filtrar por rango (strings ISO)
             mask = merged["fecha"].apply(lambda s: start_dt <= datetime.fromisoformat(s).date() <= end_dt)
             wk = merged[mask].copy()
             if wk.empty:
@@ -755,7 +827,6 @@ if mode == "Resumen":
                 st.dataframe(show, use_container_width=True)
 
         else:  # Mensual
-            # elegir mes por YYYY-MM
             merged["ym"] = merged["fecha"].str.slice(0, 7)
             months = merged["ym"].unique().tolist()
             sel_m = st.selectbox("Mes", options=months, index=len(months) - 1)
