@@ -7,7 +7,7 @@ from datetime import datetime, date
 st.set_page_config(page_title="ContaCibo", page_icon="🇮🇹", layout="centered")
 
 # =========================
-# GOOGLE SHEETS
+# GOOGLE SHEETS CONNECTION
 # =========================
 
 @st.cache_resource
@@ -31,6 +31,15 @@ logs_ws = sheet.worksheet("logs")
 # LOAD DATA (CACHED)
 # =========================
 
+def clean_numeric(series):
+    return (
+        series
+        .astype(str)
+        .str.replace(".", "", regex=False)   # quita miles
+        .str.replace(",", ".", regex=False)  # convierte decimal
+        .astype(float)
+    )
+
 @st.cache_data
 def load_foods():
     df = pd.DataFrame(foods_ws.get_all_records())
@@ -39,15 +48,8 @@ def load_foods():
 
     df["alimento"] = df["alimento"].astype(str).str.lower().str.strip()
     df["tipo"] = df["tipo"].astype(str).str.lower().str.strip()
+    df["valor_kcal"] = clean_numeric(df["valor_kcal"])
 
-    df["valor_kcal"] = (
-        df["valor_kcal"]
-        .astype(str)
-        .str.replace(",", ".", regex=False)
-        .astype(float)
-    )
-
-    df.loc[df["valor_kcal"] > 2000, "valor_kcal"] /= 100.0
     return df
 
 
@@ -56,6 +58,8 @@ def load_logs():
     df = pd.DataFrame(logs_ws.get_all_records())
     if df.empty:
         return pd.DataFrame(columns=["id","fecha","timestamp","meal","total_kcal","detalle"])
+
+    df["total_kcal"] = clean_numeric(df["total_kcal"])
     return df
 
 
@@ -68,7 +72,7 @@ MEALS = ["desayuno","almuerzo","merienda","post entreno","cena","extra"]
 # UI
 # =========================
 
-st.title("🇮🇹 ContaCibo")
+st.title("🍽 ContaCibo 📈")
 
 mode = st.radio("Modo", ["Calcular","Agregar alimento","Ver hoy"], horizontal=True)
 
@@ -132,9 +136,9 @@ if mode == "Calcular":
                     food_row = foods[foods["alimento"] == alimento].iloc[0]
 
                     if food_row["tipo"] == "100g":
-                        total += (cantidad / 100.0) * float(food_row["valor_kcal"])
+                        total += (cantidad / 100.0) * food_row["valor_kcal"]
                     else:
-                        total += cantidad * float(food_row["valor_kcal"])
+                        total += cantidad * food_row["valor_kcal"]
 
                     detalle.append(f"{alimento} {cantidad}")
 
@@ -146,7 +150,6 @@ if mode == "Calcular":
             st.session_state.pending_detalle = detalle
             st.session_state.pending_meal = meal
 
-    # Mostrar resultado si existe
     if st.session_state.pending_total is not None:
 
         st.success(f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal")
@@ -225,7 +228,6 @@ if mode == "Ver hoy":
             st.divider()
             st.write(f"**Total del día:** {round(total_dia)} kcal")
 
-            # Mostrar ambas metas
             restante_sin_gym = 1700 - total_dia
             restante_con_gym = 1950 - total_dia
 
