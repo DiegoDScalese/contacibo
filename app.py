@@ -75,7 +75,7 @@ def find_food(name):
     return row.iloc[0]
 
 def calc_meal(text):
-    total = 0
+    total = 0.0
     lines = text.strip().split("\n")
 
     for line in lines:
@@ -83,7 +83,17 @@ def calc_meal(text):
         if not line:
             continue
 
+        # ✅ Caso: "250kc" o "250 kcal" (kcal directas)
+        m_kc = re.match(r"^\s*(\d+(?:[\.,]\d+)?)\s*(kc|kcal)\s*$", line)
+        if m_kc:
+            qty_kcal = float(m_kc.group(1).replace(",", "."))
+            total += qty_kcal
+            continue
+
+        # ✅ Caso: "alimento 480 g" o "alimento 480 gr" o "alimento 480g"
         m_weight = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*(g|gr)\s*$", line)
+
+        # ✅ Caso: "alimento 1" (unidad)
         m_unit = re.match(r"^(.+?)\s+(\d+(?:[\.,]\d+)?)\s*$", line)
 
         if m_weight:
@@ -94,10 +104,10 @@ def calc_meal(text):
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "100g":
-                return None, f"{name} es unidad"
+                return None, f"{name} es unidad (ej: '{name} 1')"
 
-            kcal_value = float(str(food["valor_kcal"]).replace(",", "."))
-            total += (qty / 100) * kcal_value
+            kcal_value = float(food["valor_kcal"])
+            total += (qty / 100.0) * kcal_value
 
         elif m_unit:
             name = m_unit.group(1).strip()
@@ -107,9 +117,9 @@ def calc_meal(text):
             if food is None:
                 return None, f"No existe: {name}"
             if food["tipo"] != "unidad":
-                return None, f"{name} es 100g"
+                return None, f"{name} es 100g (ej: '{name} 200 g')"
 
-            kcal_value = float(str(food["valor_kcal"]).replace(",", "."))
+            kcal_value = float(food["valor_kcal"])
             total += qty * kcal_value
 
         else:
