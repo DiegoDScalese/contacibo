@@ -4,6 +4,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date, timedelta
 import json
+from zoneinfo import ZoneInfo
+
+ARG_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
+
+def now_ar():
+    return datetime.now(ARG_TZ)
+
+def today_ar():
+    return now_ar().date()
 
 st.set_page_config(page_title="ContaCibo", page_icon="🍽️", layout="centered")
 
@@ -509,8 +518,8 @@ if mode == "Calcular":
         if st.button("Guardar"):
             logs_actual = load_logs_df()
 
-            fecha_str = str(date.today())
-            ts_str = str(datetime.now())
+            fecha_str = str(today_ar())
+            ts_str = str(now_ar())
 
             meal_str = st.session_state.pending_meal
             total_str = f"{st.session_state.pending_total:.2f}"
@@ -636,7 +645,7 @@ if mode == "Agregar alimento":
 # VER HOY (con eliminar + editar + meta/gym)
 # ==================================================
 if mode == "Ver hoy":
-    hoy = str(date.today())
+    hoy = str(today_ar())
 
     gym_current, meta_current = get_or_create_daily_status(hoy)
 
