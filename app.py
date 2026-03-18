@@ -122,7 +122,7 @@ def find_row_index_by_id(ws, target_id: int) -> int | None:
 # ==================================================
 # SCHEMAS (headers requeridos)
 # ==================================================
-FOODS_COLS = ["id", "alimento", "tipo", "valor_kcal"]
+FOODS_COLS = ["id", "alimento", "tipo", "valor_kcal", "valor_proteina"]
 
 # logs: agregamos columnas para edición real
 LOGS_COLS = ["id", "fecha", "timestamp", "meal", "total_kcal", "detalle", "kcal_libres", "detalle_json"]
@@ -156,6 +156,7 @@ def load_foods_df() -> pd.DataFrame:
     df["alimento"] = df["alimento"].astype(str).str.lower().str.strip()
     df["tipo"] = df["tipo"].astype(str).str.lower().str.strip()
     df["valor_kcal"] = df["valor_kcal"].apply(parse_number)
+    df["valor_proteina"] = df["valor_proteina"].apply(parse_number)
     df = df[df["alimento"] != ""].copy()
     return df
 
@@ -222,6 +223,7 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
       - se guarda también kcal_actual (por si querés auditar)
     """
     total = 0.0
+    total_prot = 0.0
     detail_lines = []
     items = []
 
@@ -244,6 +246,15 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
             else:
                 kcal_actual = cantidad * valor_kcal
 
+            valor_prot = float(food.get("valor_proteina", 0) or 0)
+
+            if tipo == "100g":
+                prot = (cantidad / 100.0) * valor_prot
+            else:
+                prot = cantidad * valor_prot
+            
+            total_prot += prot
+            
             total += kcal_actual
             detail_lines.append(f"{alimento}: {cantidad} ({round(kcal_actual)} kcal)")
             items.append(
@@ -277,6 +288,15 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
                 kcal_actual = cantidad * valor_kcal
                 unidad_txt = "u"
 
+            valor_prot = float(food.get("valor_proteina", 0) or 0)
+
+            if tipo == "100g":
+                prot = (cantidad / 100.0) * valor_prot
+            else:
+                prot = cantidad * valor_prot
+        
+            total_prot += prot
+            
             # total es el objetivo (como pediste)
             total += float(kcal_target)
 
@@ -301,6 +321,7 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
         # se oculta / no aplica
         payload = {"calc_mode": "kcal", "items": items, "kcal_libres": 0}
 
+    payload["total_proteina"] = float(total_prot)
     return float(total), detail_lines, payload
 
 
@@ -501,16 +522,22 @@ if mode == "Calcular":
                 st.session_state.force_calc_mode = "Cantidad → Kcal"
                 st.success("Edición cancelada.")
                 st.rerun()
-
+    
     if st.session_state.pending_total is not None:
+        prot = st.session_state.pending_payload.get("total_proteina", 0)
+    
         if st.session_state.edit_log_id is None:
-            st.success(f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal")
+            st.success(
+                f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal | "
+                f"{round(prot)} g proteína"
+            )
         else:
             st.warning(
                 f"Editando ID {st.session_state.edit_log_id} — "
-                f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal"
+                f"{st.session_state.pending_meal.capitalize()} = {round(st.session_state.pending_total)} kcal | "
+                f"{round(prot)} g proteína"
             )
-
+    
         st.write("Detalle:")
         for line in st.session_state.pending_detail:
             st.write("-", line)
@@ -677,10 +704,21 @@ if mode == "Ver hoy":
         total_dia = float(today_logs["total_kcal"].sum())
         delta = float(total_dia - meta_current)
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total hoy", f"{round(total_dia)} kcal")
-        c2.metric("Meta", f"{meta_current} kcal")
-        c3.metric("Delta", f"{'+' if delta>0 else ''}{round(delta)} kcal")
+        total_prot = 0
+
+        for _, r in today_logs.iterrows():
+            try:
+                payload = json.loads(r["detalle_json"])
+                total_prot += payload.get("total_proteina", 0)
+            except:
+                pass
+
+        c1, c2, c3, c4 = st.columns(4)
+        
+        c1.metric("Kcal", f"{round(total_dia)}")
+        c2.metric("Proteína", f"{round(total_prot)} g")
+        c3.metric("Meta", f"{meta_current}")
+        c4.metric("Delta", f"{'+' if delta>0 else ''}{round(delta)}")
 
         st.divider()
 
@@ -746,6 +784,13 @@ if mode == "Ver hoy":
 
         st.subheader(f"Total del día: {round(total_dia)} kcal")
         st.write(f"Delta vs meta: **{'+' if delta>0 else ''}{round(delta)} kcal**")
+        prot_obj = 130
+        prot_delta = total_prot - prot_obj
+        
+        if total_prot < prot_obj:
+            st.warning(f"Proteína: {round(total_prot)}g / {prot_obj}g (te faltan {round(abs(prot_delta))}g)")
+        else:
+            st.success(f"Proteína: {round(total_prot)}g / {prot_obj}g (+{round(prot_delta)}g)")
 
 
 # ==================================================
