@@ -256,7 +256,9 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
             total_prot += prot
             
             total += kcal_actual
-            detail_lines.append(f"{alimento}: {cantidad} ({round(kcal_actual)} kcal)")
+            detail_lines.append(
+                f"{alimento}: {cantidad} ({round(kcal_actual)} kcal | {round(prot)}g prot)"
+            )
             items.append(
                 {
                     "alimento": alimento,
@@ -300,7 +302,9 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
             # total es el objetivo (como pediste)
             total += float(kcal_target)
 
-            detail_lines.append(f"{alimento}: {kcal_target} kcal → {cantidad}{unidad_txt}")
+            detail_lines.append(
+                    f"{alimento}: {kcal_target} kcal → {cantidad}{unidad_txt} ({round(prot)}g prot)"
+                )
             items.append(
                 {
                     "alimento": alimento,
