@@ -695,7 +695,6 @@ if mode == "Ver hoy":
     today_logs = logs_today[logs_today["fecha"] == hoy].copy()
 
     st.divider()
-
     if today_logs.empty:
         st.info("No hay registros hoy.")
         st.write(f"Meta hoy: **{meta_current}** kcal")
@@ -703,23 +702,27 @@ if mode == "Ver hoy":
         resumen = today_logs.groupby("meal")["total_kcal"].sum()
         total_dia = float(today_logs["total_kcal"].sum())
         delta = float(total_dia - meta_current)
-
+    
         total_prot = 0
-
+    
         for _, r in today_logs.iterrows():
+            dj = str(r["detalle_json"]).strip()
+            if not dj:
+                continue
+    
             try:
-                payload = json.loads(r["detalle_json"])
-                total_prot += payload.get("total_proteina", 0)
+                payload = json.loads(dj)
+                total_prot += float(payload.get("total_proteina", 0) or 0)
             except:
-                pass
-
+                continue
+    
         c1, c2, c3, c4 = st.columns(4)
-        
+    
         c1.metric("Kcal", f"{round(total_dia)}")
         c2.metric("Proteína", f"{round(total_prot)} g")
         c3.metric("Meta", f"{meta_current}")
         c4.metric("Delta", f"{'+' if delta>0 else ''}{round(delta)}")
-
+    
         st.divider()
 
         for meal_name in MEALS:
