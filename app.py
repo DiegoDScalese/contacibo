@@ -447,14 +447,17 @@ if mode == "Calcular":
 
     # kcal_libres: solo en qty
     kcal_libres = 0
+    prot_libres = 0
+    
     if calc_mode == "qty":
         kcal_libres_default = int(st.session_state.get("prefill_kcal_libres", 0))
         kcal_libres = st.number_input("Kcal libres", min_value=0, step=1, format="%d", value=kcal_libres_default)
+    
         prot_libres = st.number_input("Proteína libre (g)", min_value=0, step=1, format="%d", value=0)
-        
+    
     else:
-        # oculto, pero limpiamos prefill para evitar confusiones
         kcal_libres = 0
+        prot_libres = 0
 
     prefill_items = st.session_state.get("prefill_items", None)
 
