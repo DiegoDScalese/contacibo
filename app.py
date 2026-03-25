@@ -212,7 +212,7 @@ foods = load_foods_df()
 # ==================================================
 # CÁLCULO (dual)
 # ==================================================
-def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
+def calc_items_dual(rows_data, kcal_libres: int, prot_libres: int, calc_mode: str):
     """
     calc_mode:
       - "qty": rows_data = [(alimento, cantidad)]
@@ -320,7 +320,17 @@ def calc_items_dual(rows_data, kcal_libres: int, calc_mode: str):
         if kcal_libres and kcal_libres > 0:
             total += float(kcal_libres)
             detail_lines.append(f"Kcal libres: {int(kcal_libres)} kcal")
-        payload = {"calc_mode": "qty", "items": items, "kcal_libres": int(kcal_libres or 0)}
+        
+        if prot_libres and prot_libres > 0:
+            total_prot += float(prot_libres)
+            detail_lines.append(f"Proteína libre: {int(prot_libres)} g")
+        
+        payload = {
+            "calc_mode": "qty",
+            "items": items,
+            "kcal_libres": int(kcal_libres or 0),
+            "prot_libres": int(prot_libres or 0),
+        }
     else:
         # se oculta / no aplica
         payload = {"calc_mode": "kcal", "items": items, "kcal_libres": 0}
@@ -440,6 +450,8 @@ if mode == "Calcular":
     if calc_mode == "qty":
         kcal_libres_default = int(st.session_state.get("prefill_kcal_libres", 0))
         kcal_libres = st.number_input("Kcal libres", min_value=0, step=1, format="%d", value=kcal_libres_default)
+        prot_libres = st.number_input("Proteína libre (g)", min_value=0, step=1, format="%d", value=0)
+        
     else:
         # oculto, pero limpiamos prefill para evitar confusiones
         kcal_libres = 0
@@ -506,7 +518,7 @@ if mode == "Calcular":
 
     with c2:
         if st.button("Calcular"):
-            total, detail_lines, payload = calc_items_dual(rows_data, int(kcal_libres), calc_mode)
+            total, detail_lines, payload = calc_items_dual(rows_data, int(kcal_libres), int(prot_libres), calc_mode)
             st.session_state.pending_total = float(total)
             st.session_state.pending_detail = detail_lines
             st.session_state.pending_payload = payload
