@@ -389,7 +389,13 @@ def upsert_daily_status(fecha_str: str, tipo: str):
 
     # columnas
     fecha_col = header.index("fecha")
-    tipo_col = header.index("tipo_dia") if "tipo_dia" in header else None
+    if "tipo_dia" not in header:
+        # agregamos la columna si no existe
+        header.append("tipo_dia")
+        daily_ws.update("1:1", [header], value_input_option="RAW")
+        tipo_col = header.index("tipo_dia")
+    else:
+        tipo_col = header.index("tipo_dia")
     meta_col = header.index("meta")
 
     target_row = None
