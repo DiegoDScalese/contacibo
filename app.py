@@ -764,13 +764,14 @@ if mode == "Ver hoy":
         meta_nueva = META_ENTRENO
     
     # guardamos siempre (simple y robusto)
-    upsert_daily_status(hoy, tipo_nuevo)
-    
-    # recargamos
-    tipo_actual, meta_current = get_or_create_daily_status(hoy)
-    
-    st.success("Estado del día actualizado ✅")
-    st.rerun()
+    if "last_tipo_dia" not in st.session_state:
+        st.session_state.last_tipo_dia = tipo_actual
+
+    if tipo_nuevo != st.session_state.last_tipo_dia:
+        upsert_daily_status(hoy, tipo_nuevo)
+        st.session_state.last_tipo_dia = tipo_nuevo
+        st.success("Estado del día actualizado ✅")
+        st.rerun()
 
     logs_today = load_logs_df()
     today_logs = logs_today[logs_today["fecha"] == hoy].copy()
