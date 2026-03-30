@@ -20,8 +20,9 @@ st.set_page_config(page_title="ContaCibo", page_icon="🍽️", layout="centered
 # CONFIG
 # ==================================================
 MEALS = ["desayuno", "almuerzo", "merienda", "post entreno", "cena", "extra"]
-META_NORMAL = 1700
-META_GYM = 1950
+META_TRANQUILO = 1925
+META_NORMAL = 1975
+META_ENTRENO = 2050
 
 
 # ==================================================
@@ -696,19 +697,44 @@ if mode == "Ver hoy":
     gym_current, meta_current = get_or_create_daily_status(hoy)
 
     st.subheader("Estado del día")
+    tipo_actual = "normal"
+
+    if gym_current:
+        tipo_actual = "entrenamiento"
+    
     choice = st.radio(
-        "Meta de hoy",
-        options=[f"Normal ({META_NORMAL})", f"Gimnasio ({META_GYM})"],
-        index=1 if gym_current else 0,
+        "Tipo de día",
+        options=[
+            f"Tranquilo ({META_TRANQUILO})",
+            f"Normal ({META_NORMAL})",
+            f"Entrenamiento ({META_ENTRENO})"
+        ],
+        index={
+            "tranquilo": 0,
+            "normal": 1,
+            "entrenamiento": 2
+        }[tipo_actual],
         horizontal=True,
     )
 
-    gym_new = choice.startswith("Gimnasio")
-    if gym_new != gym_current:
-        upsert_daily_status(hoy, gym_new)
-        gym_current, meta_current = get_or_create_daily_status(hoy)
-        st.success("Estado del día actualizado ✅")
-        st.rerun()
+    if choice.startswith("Tranquilo"):
+        tipo_nuevo = "tranquilo"
+        meta_nueva = META_TRANQUILO
+    elif choice.startswith("Normal"):
+        tipo_nuevo = "normal"
+        meta_nueva = META_NORMAL
+    else:
+        tipo_nuevo = "entrenamiento"
+        meta_nueva = META_ENTRENO
+    
+    # guardamos siempre (simple y robusto)
+    daily_ws.append_row([hoy, "TRUE", str(meta_nueva)], value_input_option="RAW")
+    
+    # recargamos
+    gym_current, meta_current = get_or_create_daily_status(hoy)
+    
+    st.success("Estado del día actualizado ✅")
+    st.rerun()
 
     logs_today = load_logs_df()
     today_logs = logs_today[logs_today["fecha"] == hoy].copy()
