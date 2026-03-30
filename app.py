@@ -202,7 +202,11 @@ def load_daily_status_df() -> pd.DataFrame:
             df[col] = ""
 
     df["fecha"] = df["fecha"].astype(str).str.strip()
-    df["gym"] = df["gym"].apply(safe_bool)
+    # compatibilidad con columnas viejas
+    if "tipo_dia" not in df.columns:
+        df["tipo_dia"] = ""
+    
+    df["tipo_dia"] = df["tipo_dia"].astype(str).str.strip().str.lower()
     df["meta"] = df["meta"].apply(safe_int)
     return df
 
@@ -346,28 +350,46 @@ def calc_items_dual(rows_data, kcal_libres: int, prot_libres: int, calc_mode: st
 def get_or_create_daily_status(fecha_str: str):
     df = load_daily_status_df()
     row = df[df["fecha"] == fecha_str]
+
     if row.empty:
-        gym = False
+        tipo = "normal"
         meta = META_NORMAL
-        daily_ws.append_row([fecha_str, "FALSE", str(meta)], value_input_option="RAW")
+        daily_ws.append_row([fecha_str, tipo, str(meta)], value_input_option="RAW")
         load_daily_status_df.clear()
-        return gym, meta
-    gym = bool(row.iloc[0]["gym"])
-    meta = int(row.iloc[0]["meta"]) if int(row.iloc[0]["meta"]) > 0 else (META_GYM if gym else META_NORMAL)
-    return gym, meta
+        return tipo, meta
+
+    tipo = str(row.iloc[0].get("tipo_dia", "normal")).strip().lower()
+
+    if tipo == "tranquilo":
+        meta = META_TRANQUILO
+    elif tipo == "entrenamiento":
+        meta = META_ENTRENO
+    else:
+        tipo = "normal"
+        meta = META_NORMAL
+
+    return tipo, meta
 
 
-def upsert_daily_status(fecha_str: str, gym: bool):
-    meta = META_GYM if gym else META_NORMAL
+def upsert_daily_status(fecha_str: str, tipo: str):
+    if tipo == "tranquilo":
+        meta = META_TRANQUILO
+    elif tipo == "normal":
+        meta = META_NORMAL
+    else:
+        meta = META_ENTRENO
+
     values = daily_ws.get_all_values()
-    header = [h.strip() for h in values[0]] if values else DAILY_COLS
-    if not values:
-        daily_ws.append_row(DAILY_COLS, value_input_option="RAW")
-        values = daily_ws.get_all_values()
-        header = DAILY_COLS
 
+    if not values:
+        daily_ws.append_row(["fecha", "tipo_dia", "meta"], value_input_option="RAW")
+        values = daily_ws.get_all_values()
+
+    header = [h.strip() for h in values[0]]
+
+    # columnas
     fecha_col = header.index("fecha")
-    gym_col = header.index("gym")
+    tipo_col = header.index("tipo_dia") if "tipo_dia" in header else None
     meta_col = header.index("meta")
 
     target_row = None
@@ -377,10 +399,17 @@ def upsert_daily_status(fecha_str: str, gym: bool):
             break
 
     if target_row is None:
-        daily_ws.append_row([fecha_str, "TRUE" if gym else "FALSE", str(meta)], value_input_option="RAW")
+        daily_ws.append_row(
+            [fecha_str, tipo, str(meta)],
+            value_input_option="RAW"
+        )
     else:
-        rng = f"{gspread.utils.rowcol_to_a1(target_row, gym_col+1)}:{gspread.utils.rowcol_to_a1(target_row, meta_col+1)}"
-        daily_ws.update(rng, [["TRUE" if gym else "FALSE", str(meta)]], value_input_option="RAW")
+        rng = f"{gspread.utils.rowcol_to_a1(target_row, tipo_col+1)}:{gspread.utils.rowcol_to_a1(target_row, meta_col+1)}"
+        daily_ws.update(
+            rng,
+            [[tipo, str(meta)]],
+            value_input_option="RAW"
+        )
 
     load_daily_status_df.clear()
 
@@ -694,7 +723,7 @@ if mode == "Agregar alimento":
 if mode == "Ver hoy":
     hoy = str(today_ar())
 
-    gym_current, meta_current = get_or_create_daily_status(hoy)
+    tipo_actual, meta_current = get_or_create_daily_status(hoy)
 
     st.subheader("Estado del día")
     tipo_actual = "normal"
@@ -728,10 +757,10 @@ if mode == "Ver hoy":
         meta_nueva = META_ENTRENO
     
     # guardamos siempre (simple y robusto)
-    daily_ws.append_row([hoy, "TRUE", str(meta_nueva)], value_input_option="RAW")
+    upsert_daily_status(hoy, tipo_nuevo)
     
     # recargamos
-    gym_current, meta_current = get_or_create_daily_status(hoy)
+    tipo_actual, meta_current = get_or_create_daily_status(hoy)
     
     st.success("Estado del día actualizado ✅")
     st.rerun()
