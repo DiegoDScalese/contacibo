@@ -69,10 +69,14 @@ def parse_number(x) -> float:
 
 
 def safe_int(x) -> int:
-    s = str(x).strip()
-    if s == "" or s.lower() == "none":
+    s = str(x).strip().lower()
+    if s == "" or s in ("none", "nan"):
         return 0
-    return int(round(parse_number(s)))
+
+    try:
+        return int(round(parse_number(s)))
+    except:
+        return 0
 
 
 def safe_bool(x) -> bool:
