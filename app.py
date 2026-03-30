@@ -43,10 +43,12 @@ def get_worksheets():
 
     foods_ws = sheet.worksheet("foods")
     logs_ws = sheet.worksheet("logs")
-
-    # hoja nueva
     daily_ws = sheet.worksheet("daily_status")
-
+    
+    ensure_headers(foods_ws, FOODS_COLS)
+    ensure_headers(logs_ws, LOGS_COLS)
+    ensure_headers(daily_ws, DAILY_COLS)
+    
     return foods_ws, logs_ws, daily_ws
 
 
@@ -134,10 +136,7 @@ LOGS_COLS = ["id", "fecha", "timestamp", "meal", "total_kcal", "detalle", "kcal_
 
 DAILY_COLS = ["fecha", "gym", "meta"]
 
-# aseguramos headers
-ensure_headers(foods_ws, FOODS_COLS)
-ensure_headers(logs_ws, LOGS_COLS)
-ensure_headers(daily_ws, DAILY_COLS)
+
 
 
 # ==================================================
