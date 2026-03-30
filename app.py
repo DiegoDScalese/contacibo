@@ -52,7 +52,7 @@ def get_worksheets():
     return foods_ws, logs_ws, daily_ws
 
 
-foods_ws, logs_ws, daily_ws = get_worksheets()
+
 
 
 # ==================================================
@@ -136,7 +136,7 @@ LOGS_COLS = ["id", "fecha", "timestamp", "meal", "total_kcal", "detalle", "kcal_
 
 DAILY_COLS = ["fecha", "gym", "meta"]
 
-
+foods_ws, logs_ws, daily_ws = get_worksheets()
 
 
 # ==================================================
