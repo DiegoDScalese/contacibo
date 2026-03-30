@@ -726,10 +726,7 @@ if mode == "Ver hoy":
     tipo_actual, meta_current = get_or_create_daily_status(hoy)
 
     st.subheader("Estado del día")
-    tipo_actual = "normal"
-
-    if gym_current:
-        tipo_actual = "entrenamiento"
+    tipo_actual = tipo_actual if tipo_actual in ["tranquilo", "normal", "entrenamiento"] else "normal"
     
     choice = st.radio(
         "Tipo de día",
