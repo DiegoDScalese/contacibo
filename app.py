@@ -20,9 +20,9 @@ st.set_page_config(page_title="ContaCibo", page_icon="🍽️", layout="centered
 # CONFIG
 # ==================================================
 MEALS = ["desayuno", "almuerzo", "merienda", "post entreno", "cena", "extra"]
-META_TRANQUILO = 1925
-META_NORMAL = 1975
-META_ENTRENO = 2050
+META_TRANQUILO = 1950
+META_NORMAL = 2000
+META_ENTRENO = 2100
 
 
 # ==================================================
