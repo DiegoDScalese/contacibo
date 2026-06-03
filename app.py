@@ -641,17 +641,22 @@ if mode == "Calcular":
                 st.session_state.edit_log_id = None
 
             load_logs_df.clear()
-
+            
             st.session_state.pending_total = None
             st.session_state.pending_detail = None
             st.session_state.pending_payload = None
             st.session_state.pending_meal = None
-
+            
             st.session_state.prefill_meal = MEALS[0]
             st.session_state.prefill_kcal_libres = 0
             st.session_state.prefill_items = None
-            st.session_state.force_calc_mode = "Cantidad → Kcal"
-
+            
+            st.session_state.rows_count = 4
+            
+            for i in range(20):
+                st.session_state.pop(f"food_{i}", None)
+                st.session_state.pop(f"qty_val_{i}", None)
+            
             st.rerun()
 
 
