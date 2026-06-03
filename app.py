@@ -467,29 +467,21 @@ with col_reset:
     st.write("")
     st.write("")
     if st.button("🔄 Reiniciar"):
-        # Borra caché de datos: alimentos, logs, daily_status
         st.cache_data.clear()
-
-        # Borra caché de recursos: conexión a Google Sheets
         st.cache_resource.clear()
 
-        # Limpia estados del cálculo
         st.session_state.pending_total = None
         st.session_state.pending_detail = None
         st.session_state.pending_payload = None
         st.session_state.pending_meal = None
 
-        # Limpia edición / precarga
         st.session_state.prefill_meal = MEALS[0]
         st.session_state.prefill_kcal_libres = 0
         st.session_state.prefill_items = None
         st.session_state.edit_log_id = None
 
-        # Vuelve a estado inicial
         st.session_state.rows_count = 4
-        st.session_state.mode_selector = "Calcular"
 
-        # Fuerza que Streamlit cree widgets nuevos vacíos
         st.session_state.form_reset_id = st.session_state.get("form_reset_id", 0) + 1
         st.session_state.food_form_reset_id = st.session_state.get("food_form_reset_id", 0) + 1
 
