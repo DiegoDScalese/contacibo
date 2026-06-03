@@ -519,7 +519,7 @@ if mode == "Calcular":
                 f"Alimento {i+1}",
                 options=foods_list,
                 index=foods_list.index(default_food) if default_food in foods_list else 0,
-                key=f"food_{i}",
+                key=f"food_{st.session_state.form_reset_id}_{i}",
             )
         with col2:
             val = st.number_input(
@@ -528,7 +528,7 @@ if mode == "Calcular":
                 step=1,
                 format="%d",
                 value=None if default_val == 0 else int(default_val),
-                key=f"qty_val_{i}",
+                key=f"qty_val_{st.session_state.form_reset_id}_{i}",
             )
 
         rows_data.append((alimento, int(val) if val is not None else 0))
@@ -655,10 +655,7 @@ if mode == "Calcular":
             st.session_state.prefill_items = None
             
             st.session_state.rows_count = 4
-            
-            for i in range(20):
-                st.session_state.pop(f"food_{i}", None)
-                st.session_state.pop(f"qty_val_{i}", None)
+            st.session_state.form_reset_id += 1
             
             st.rerun()
 
