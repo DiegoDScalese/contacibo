@@ -16,6 +16,7 @@ def today_ar():
 
 st.set_page_config(page_title="ContaCibo", page_icon="🍽️", layout="centered")
 
+
 # ==================================================
 # CONFIG
 # ==================================================
@@ -50,9 +51,6 @@ def get_worksheets():
     ensure_headers(daily_ws, DAILY_COLS)
     
     return foods_ws, logs_ws, daily_ws
-
-
-
 
 
 # ==================================================
@@ -455,10 +453,11 @@ if "mode_selector" not in st.session_state:
 
 mode = st.radio(
     "Modo",
-    ["Calcular", "Agregar alimento", "Ver hoy", "Resumen"],
+    ["Calcular", "Agregar alimento", "Ver hoy"],
     horizontal=True,
     key="mode_selector"
 )
+
 
 # ==================================================
 # CALCULAR
@@ -877,120 +876,3 @@ if mode == "Ver hoy":
             st.success(f"Proteína: {round(total_prot)}g / {prot_obj}g (+{round(prot_delta)}g)")
 
 
-# ==================================================
-# RESUMEN (diario / semanal / mensual) usando DELTA vs META
-# ==================================================
-if mode == "Resumen":
-    logs_all = load_logs_df()
-    daily_all = load_daily_status_df()
-
-    if logs_all.empty:
-        st.info("Todavía no hay datos en logs.")
-    else:
-        by_day = logs_all.groupby("fecha", as_index=False)["total_kcal"].sum()
-        by_day["total_kcal"] = by_day["total_kcal"].astype(float)
-
-        if not daily_all.empty:
-            merged = by_day.merge(daily_all[["fecha", "gym", "meta"]], on="fecha", how="left")
-        else:
-            merged = by_day.copy()
-            merged["gym"] = False
-            merged["meta"] = None
-
-        def infer_meta(row):
-            if pd.notna(row.get("meta")) and int(row["meta"]) > 0:
-                return int(row["meta"])
-            g = bool(row.get("gym")) if pd.notna(row.get("gym")) else False
-            return META_GYM if g else META_NORMAL
-
-        merged["gym"] = merged["gym"].fillna(False)
-        merged["meta"] = merged.apply(infer_meta, axis=1)
-        merged["delta"] = merged["total_kcal"] - merged["meta"]
-
-        merged = merged.sort_values("fecha").reset_index(drop=True)
-
-        view = st.radio("Vista", ["Diario", "Semanal", "Mensual"], horizontal=True)
-        st.divider()
-
-        if view == "Diario":
-            fechas = merged["fecha"].tolist()
-            sel = st.selectbox("Fecha", options=fechas, index=len(fechas) - 1)
-            row = merged[merged["fecha"] == sel].iloc[0]
-
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total", f"{round(float(row['total_kcal']))} kcal")
-            c2.metric("Meta", f"{int(row['meta'])} kcal")
-            d = float(row["delta"])
-            c3.metric("Delta", f"{'+' if d>0 else ''}{round(d)} kcal")
-            c4.metric("Gym", "Sí" if bool(row["gym"]) else "No")
-
-            logs_day = logs_all[logs_all["fecha"] == sel].copy()
-            if not logs_day.empty:
-                st.subheader("Por comida")
-                by_meal = logs_day.groupby("meal")["total_kcal"].sum().reindex(MEALS).dropna()
-                st.bar_chart(by_meal)
-
-        elif view == "Semanal":
-            fechas = merged["fecha"].tolist()
-            end_sel = st.selectbox("Semana terminando en", options=fechas, index=len(fechas) - 1)
-            end_dt = datetime.fromisoformat(end_sel).date()
-            start_dt = end_dt - timedelta(days=6)
-
-            mask = merged["fecha"].apply(lambda s: start_dt <= datetime.fromisoformat(s).date() <= end_dt)
-            wk = merged[mask].copy()
-            if wk.empty:
-                st.info("No hay datos en ese rango.")
-            else:
-                avg_delta = float(wk["delta"].mean())
-                sum_delta = float(wk["delta"].sum())
-                days_in = int((wk["delta"].abs() <= 100).sum())
-                days_total = int(len(wk))
-                gym_days = int(wk["gym"].sum())
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Promedio delta", f"{'+' if avg_delta>0 else ''}{round(avg_delta)} kcal")
-                c2.metric("Delta total", f"{'+' if sum_delta>0 else ''}{round(sum_delta)} kcal")
-                c3.metric("Días en rango ±100", f"{days_in}/{days_total}")
-                c4.metric("Días con gym", f"{gym_days}")
-
-                st.subheader("Tendencia (delta)")
-                chart_df = wk[["fecha", "delta"]].set_index("fecha")
-                st.line_chart(chart_df)
-
-                st.subheader("Tabla")
-                show = wk[["fecha", "total_kcal", "meta", "delta", "gym"]].copy()
-                show["total_kcal"] = show["total_kcal"].round(0).astype(int)
-                show["delta"] = show["delta"].round(0).astype(int)
-                show["gym"] = show["gym"].apply(lambda x: "Sí" if x else "No")
-                st.dataframe(show, use_container_width=True)
-
-        else:  # Mensual
-            merged["ym"] = merged["fecha"].str.slice(0, 7)
-            months = merged["ym"].unique().tolist()
-            sel_m = st.selectbox("Mes", options=months, index=len(months) - 1)
-
-            mo = merged[merged["ym"] == sel_m].copy()
-            if mo.empty:
-                st.info("No hay datos para ese mes.")
-            else:
-                avg_delta = float(mo["delta"].mean())
-                days_in = int((mo["delta"].abs() <= 100).sum())
-                days_over = int((mo["delta"] > 0).sum())
-                days_under = int((mo["delta"] < 0).sum())
-                gym_days = int(mo["gym"].sum())
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Promedio delta", f"{'+' if avg_delta>0 else ''}{round(avg_delta)} kcal")
-                c2.metric("Días en rango ±100", f"{days_in}/{len(mo)}")
-                c3.metric("Sobre meta", f"{days_over}")
-                c4.metric("Con gym", f"{gym_days}")
-
-                st.subheader("Tendencia (delta)")
-                st.line_chart(mo[["fecha", "delta"]].set_index("fecha"))
-
-                st.subheader("Tabla")
-                show = mo[["fecha", "total_kcal", "meta", "delta", "gym"]].copy()
-                show["total_kcal"] = show["total_kcal"].round(0).astype(int)
-                show["delta"] = show["delta"].round(0).astype(int)
-                show["gym"] = show["gym"].apply(lambda x: "Sí" if x else "No")
-                st.dataframe(show, use_container_width=True)
