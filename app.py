@@ -670,54 +670,65 @@ if mode == "Agregar alimento":
     proteina = st.text_input("Proteína (g) (ej: 20,5 o 0)")
 
     if st.button("Guardar alimento"):
-        nombre_n = nombre.strip().lower()
-        if not nombre_n:
-            st.error("Falta el nombre.")
-        else:
-            try:
-                valor_f = parse_number(valor)
-                proteina_f = parse_number(proteina)
-            except Exception:
-                st.error("Valor inválido. Revisá kcal o proteína. Ej: 29,59 o 20,5")
-                st.stop()
+    nombre_n = nombre.strip().lower()
 
-            foods_now = load_foods_df()
-            existing = foods_now[foods_now["alimento"] == nombre_n]
+    if not nombre_n:
+        st.error("Falta el nombre.")
+    else:
+        try:
+            valor_f = parse_number(valor)
+            proteina_f = parse_number(proteina)
+        except Exception:
+            st.error("Valor inválido. Revisá kcal o proteína. Ej: 29,59 o 20,5")
+            st.stop()
 
-            values = foods_ws.get_all_values()
-            header = [h.strip() for h in values[0]]
-            alimento_col = header.index("alimento") + 1
-            tipo_col = header.index("tipo") + 1
-            kcal_col = header.index("valor_kcal") + 1
-            prot_col = header.index("valor_proteina") + 1
+        foods_now = load_foods_df()
+        existing = foods_now[foods_now["alimento"] == nombre_n]
 
-            if not existing.empty:
-                target_row = None
-                for idx, row in enumerate(values[1:], start=2):
-                    if str(row[alimento_col - 1]).strip().lower() == nombre_n:
-                        target_row = idx
-                        break
+        values = foods_ws.get_all_values()
+        header = [h.strip() for h in values[0]]
 
-                if target_row is None:
-                    st.error("No encontré la fila para actualizar.")
-                else:
-                    rng = f"{gspread.utils.rowcol_to_a1(target_row, alimento_col)}:{gspread.utils.rowcol_to_a1(target_row, prot_col)}"
-                    foods_ws.update(
-                        rng,
-                        [[nombre_n, tipo, f"{valor_f:.2f}", f"{proteina_f:.2f}"]],
-                        value_input_option="RAW",
-                    )
-                    load_foods_df.clear()
-                    st.success("Actualizado ✅")
+        alimento_col = header.index("alimento") + 1
+        tipo_col = header.index("tipo") + 1
+        kcal_col = header.index("valor_kcal") + 1
+        prot_col = header.index("valor_proteina") + 1
+
+        kcal_txt = f"{valor_f:.2f}".replace(".", ",")
+        proteina_txt = f"{proteina_f:.2f}".replace(".", ",")
+
+        if not existing.empty:
+            target_row = None
+
+            for idx, row in enumerate(values[1:], start=2):
+                if str(row[alimento_col - 1]).strip().lower() == nombre_n:
+                    target_row = idx
+                    break
+
+            if target_row is None:
+                st.error("No encontré la fila para actualizar.")
             else:
-                new_id = int(foods_now["id"].max()) + 1 if not foods_now.empty else 1
-                foods_ws.append_row(
-                    [new_id, nombre_n, tipo, f"{valor_f:.2f}", f"{proteina_f:.2f}"],
-                    value_input_option="RAW"
+                rng = f"{gspread.utils.rowcol_to_a1(target_row, alimento_col)}:{gspread.utils.rowcol_to_a1(target_row, prot_col)}"
+                foods_ws.update(
+                    rng,
+                    [[nombre_n, tipo, kcal_txt, proteina_txt]],
+                    value_input_option="RAW",
                 )
                 load_foods_df.clear()
-                st.success("Agregado ✅")
+                st.success("Actualizado ✅")
 
+        else:
+            new_id = int(foods_now["id"].max()) + 1 if not foods_now.empty else 1
+
+            foods_ws.append_row(
+                [new_id, nombre_n, tipo, kcal_txt, proteina_txt],
+                value_input_option="RAW"
+            )
+            load_foods_df.clear()
+            st.success("Agregado ✅")
+
+        st.session_state.food_form_reset_id += 1
+        st.rerun()
+   
 
 # ==================================================
 # VER HOY (con eliminar + editar + meta/gym)
