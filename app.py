@@ -453,12 +453,24 @@ st.title("🍽️ ContaCibo")
 if "mode_selector" not in st.session_state:
     st.session_state.mode_selector = "Calcular"
 
-mode = st.radio(
-    "Modo",
-    ["Calcular", "Agregar alimento", "Ver hoy"],
-    horizontal=True,
-    key="mode_selector"
-)
+col_modo, col_reset = st.columns([4, 1])
+
+with col_modo:
+    mode = st.radio(
+        "Modo",
+        ["Calcular", "Agregar alimento", "Ver hoy"],
+        horizontal=True,
+        key="mode_selector"
+    )
+
+with col_reset:
+    st.write("")
+    st.write("")
+    if st.button("🔄 Reiniciar"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.session_state.clear()
+        st.rerun()
 
 
 # ==================================================
