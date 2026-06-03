@@ -427,6 +427,9 @@ def upsert_daily_status(fecha_str: str, tipo: str):
 if "rows_count" not in st.session_state:
     st.session_state.rows_count = 4
 
+if "form_reset_id" not in st.session_state:
+    st.session_state.form_reset_id = 0
+
 if "pending_total" not in st.session_state:
     st.session_state.pending_total = None
     st.session_state.pending_detail = None
