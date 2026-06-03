@@ -468,8 +468,20 @@ with col_reset:
     st.write("")
     if st.button("🔄 Reiniciar"):
         st.cache_data.clear()
-        st.cache_resource.clear()
-        st.session_state.clear()
+
+        st.session_state.pending_total = None
+        st.session_state.pending_detail = None
+        st.session_state.pending_payload = None
+        st.session_state.pending_meal = None
+
+        st.session_state.prefill_meal = MEALS[0]
+        st.session_state.prefill_kcal_libres = 0
+        st.session_state.prefill_items = None
+        st.session_state.edit_log_id = None
+
+        st.session_state.rows_count = 4
+        st.session_state.form_reset_id += 1
+        st.session_state.food_form_reset_id += 1
         st.rerun()
 
 
