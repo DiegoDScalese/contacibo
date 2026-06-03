@@ -441,10 +441,6 @@ if st.session_state.get("force_mode"):
     st.session_state.mode_selector = st.session_state.force_mode
     st.session_state.force_mode = None
 
-# Cambio programático del modo de cálculo dentro de Calcular (qty/kcal)
-if st.session_state.get("force_calc_mode"):
-    st.session_state.calc_mode_selector = st.session_state.force_calc_mode
-    st.session_state.force_calc_mode = None
 
 st.title("🍽️ ContaCibo")
 
@@ -463,18 +459,7 @@ mode = st.radio(
 # CALCULAR
 # ==================================================
 if mode == "Calcular":
-
-    # selector de modo de cálculo (nuevo)
-    if "calc_mode_selector" not in st.session_state:
-        st.session_state.calc_mode_selector = "Cantidad → Kcal"
-
-    calc_mode_label = st.radio(
-        "Modo de cálculo",
-        ["Cantidad → Kcal", "Kcal → Cantidad"],
-        horizontal=True,
-        key="calc_mode_selector",
-    )
-    calc_mode = "qty" if calc_mode_label.startswith("Cantidad") else "kcal"
+    calc_mode = "qty"
 
     # meal (si venimos de editar, puede estar precargada)
     default_meal = st.session_state.get("prefill_meal", MEALS[0])
