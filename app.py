@@ -430,6 +430,9 @@ if "rows_count" not in st.session_state:
 if "form_reset_id" not in st.session_state:
     st.session_state.form_reset_id = 0
 
+if "food_form_reset_id" not in st.session_state:
+    st.session_state.food_form_reset_id = 0
+
 if "pending_total" not in st.session_state:
     st.session_state.pending_total = None
     st.session_state.pending_detail = None
@@ -659,19 +662,34 @@ if mode == "Calcular":
             
             st.rerun()
 
-
 # ==================================================
 # AGREGAR ALIMENTO
 # ==================================================
 if mode == "Agregar alimento":
-    nombre = st.text_input("Nombre")
-    tipo = st.selectbox("Tipo", ["100g", "unidad"])
-    valor = st.text_input("Valor kcal (ej: 29,59 o 380,00)")
-    proteina = st.text_input("Proteína (g) (ej: 20,5 o 0)")
+    nombre = st.text_input(
+        "Nombre",
+        key=f"nuevo_nombre_{st.session_state.food_form_reset_id}"
+    )
+
+    tipo = st.selectbox(
+        "Tipo",
+        ["100g", "unidad"],
+        key=f"nuevo_tipo_{st.session_state.food_form_reset_id}"
+    )
+
+    valor = st.text_input(
+        "Valor kcal (ej: 29,59 o 380,00)",
+        key=f"nuevo_valor_{st.session_state.food_form_reset_id}"
+    )
+
+    proteina = st.text_input(
+        "Proteína (g) (ej: 20,5 o 0)",
+        key=f"nuevo_proteina_{st.session_state.food_form_reset_id}"
+    )
 
     if st.button("Guardar alimento"):
         nombre_n = nombre.strip().lower()
-    
+
         if not nombre_n:
             st.error("Falta el nombre.")
         else:
@@ -681,54 +699,52 @@ if mode == "Agregar alimento":
             except Exception:
                 st.error("Valor inválido. Revisá kcal o proteína. Ej: 29,59 o 20,5")
                 st.stop()
-    
+
             foods_now = load_foods_df()
             existing = foods_now[foods_now["alimento"] == nombre_n]
-    
+
             values = foods_ws.get_all_values()
             header = [h.strip() for h in values[0]]
-    
+
             alimento_col = header.index("alimento") + 1
-            tipo_col = header.index("tipo") + 1
-            kcal_col = header.index("valor_kcal") + 1
             prot_col = header.index("valor_proteina") + 1
-    
-            kcal_txt = f"{valor_f:.2f}".replace(".", ",")
-            proteina_txt = f"{proteina_f:.2f}".replace(".", ",")
-    
+
+            kcal_num = valor_f
+            proteina_num = proteina_f
+
             if not existing.empty:
                 target_row = None
-    
+
                 for idx, row in enumerate(values[1:], start=2):
                     if str(row[alimento_col - 1]).strip().lower() == nombre_n:
                         target_row = idx
                         break
-    
+
                 if target_row is None:
                     st.error("No encontré la fila para actualizar.")
                 else:
                     rng = f"{gspread.utils.rowcol_to_a1(target_row, alimento_col)}:{gspread.utils.rowcol_to_a1(target_row, prot_col)}"
                     foods_ws.update(
                         rng,
-                        [[nombre_n, tipo, kcal_txt, proteina_txt]],
-                        value_input_option="RAW",
+                        [[nombre_n, tipo, kcal_num, proteina_num]],
+                        value_input_option="USER_ENTERED",
                     )
                     load_foods_df.clear()
                     st.success("Actualizado ✅")
-    
+
             else:
                 new_id = int(foods_now["id"].max()) + 1 if not foods_now.empty else 1
-    
+
                 foods_ws.append_row(
-                    [new_id, nombre_n, tipo, kcal_txt, proteina_txt],
-                    value_input_option="RAW"
+                    [new_id, nombre_n, tipo, kcal_num, proteina_num],
+                    value_input_option="USER_ENTERED"
                 )
                 load_foods_df.clear()
                 st.success("Agregado ✅")
-    
+
             st.session_state.food_form_reset_id += 1
             st.rerun()
-   
+
 
 # ==================================================
 # VER HOY (con eliminar + editar + meta/gym)
