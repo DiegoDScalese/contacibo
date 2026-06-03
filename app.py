@@ -519,15 +519,13 @@ if mode == "Calcular":
                 key=f"food_{i}",
             )
         with col2:
-            label = "Cant." if calc_mode == "qty" else "Kcal"
-            # keys separadas por modo para no mezclar estados
             val = st.number_input(
-                label,
+                "Cant.",
                 min_value=0,
                 step=1,
                 format="%d",
                 value=None if default_val == 0 else int(default_val),
-                key=f"{calc_mode}_val_{i}",
+                key=f"qty_val_{i}",
             )
 
         rows_data.append((alimento, int(val) if val is not None else 0))
@@ -827,9 +825,6 @@ if mode == "Ver hoy":
 
                         if payload and isinstance(payload, dict) and isinstance(payload.get("items", []), list):
                             st.session_state.prefill_items = payload["items"]
-                            # set calc mode desde payload
-                            cm = payload.get("calc_mode", "qty")
-                            st.session_state.force_calc_mode = "Kcal → Cantidad" if cm == "kcal" else "Cantidad → Kcal"
                         else:
                             st.session_state.prefill_items = None
                             st.session_state.force_calc_mode = "Cantidad → Kcal"
